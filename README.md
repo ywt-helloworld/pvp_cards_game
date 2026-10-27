@@ -225,6 +225,33 @@
 
 炸弹优先比较张数，只有张数相同时才按 `3 < 4 < 5 < 6 < 7 < 8 < 9 < 10 < J < Q < K < A < 2` 比较点数。
 
+### 4.4 Poker 类的数据成员
+
+扑克牌使用 C++ 类 `Poker` 表示，当前确定以下五个数据成员：
+
+```cpp
+#include <optional>
+
+class Poker {
+public:
+    bool isJoker;              // 是否为王（赖子）
+    std::optional<int> suit;  // 花色
+    std::optional<int> rank;  // 点数
+    int multiplier;          // 倍率
+    int baseValue;           // 基数
+};
+```
+
+| 含义 | 变量名 | 类型 |
+|---|---|---|
+| 是不是王 | `isJoker` | `bool` |
+| 花色 | `suit` | `std::optional<int>` |
+| 点数 | `rank` | `std::optional<int>` |
+| 倍率 | `multiplier` | `int` |
+| 基数 | `baseValue` | `int` |
+
+`std::optional<int>` 表示花色与点数可以为空，空值使用 `std::nullopt`。成员初始值、花色编码及倍率与基数的具体计算规则待后续确定。
+
 ---
 
 ## 5. 牌型系统
