@@ -28,7 +28,7 @@
 
 ## 1. 游戏核心规则
 
-> 当前文档包含基础规则、牌型直接加强、商店通用机制、拓展牌设计，以及统一的阶段结构和卡牌描述规范。§9 保留历史功能牌草案，尚未审定，不作为当前配置；新设计的 72 张功能牌具体清单仍未纳入。历史草案与 §1、§2、§7、§8、§10 冲突时，以这些节的当前规则为准。本文档不代表游戏代码已经实现。
+> 当前文档包含基础规则、牌型直接加强、商店通用机制、拓展牌设计，以及统一的阶段结构和卡牌描述规范。功能牌统一为被动触发，抽象基类设计见 §9.9。§9 的历史功能牌清单尚未审定，不作为当前配置；旧主动效果未启用，需另行设计被动触发条件后审定，新设计的 72 张功能牌具体清单仍未纳入。历史草案与 §1、§2、§7、§8、§10 及 §9.9 冲突时，以这些节的当前规则为准。本文档不代表游戏代码已经实现。
 
 ### 1.1 主体流程
 
@@ -103,9 +103,9 @@
 | 字段 | 必须说明的内容 |
 |---|---|
 | 名称与类型 | 功能牌或拓展牌；商店付费加强为服务，不列作卡牌 |
-| 使用阶段 | 玩家允许发动或使用的阶段；被动牌注明无需主动发动 |
+| 使用阶段 | 功能牌注明被动触发、无需主动发动；拓展牌注明获得即使用的阶段 |
 | 生效阶段与事件 | 效果实际发生的阶段、事件及其前后时点 |
-| 主动／被动 | 需要玩家主动发动，或满足条件后自动触发 |
+| 触发方式 | 功能牌统一在事件发生且条件满足时自动触发；拓展牌获得即使用 |
 | 生效条件 | 触发所需的牌型、行为、手牌状态、来源等条件 |
 | 目标 | 自己、指定玩家、指定手牌、随机对象或无目标 |
 | 效果 | 分数、金币、牌面变化等具体结果及计算方式 |
@@ -116,9 +116,9 @@
 
 **使用阶段与生效阶段分别记录。** 例如，E01「红墨水」在商店获得时立即使用并消耗，指定效果在下一局发牌后生效。保留的是已确定的效果标记，不是可延后使用的卡牌。
 
-**主动／被动按卡牌是否需要主动发动判断。** 例如，玩家自行决定不出牌属于主动操作，但「主动不出牌后自动获得奖励」属于被动卡牌效果。
+**游戏中的功能牌只有被动效果，不提供玩家主动发动功能牌的操作。** 例如，玩家自行决定不出牌属于玩家操作，「主动不出牌后自动获得奖励」属于被动卡牌效果。被动触发后如需选择目标或方案，仍按该卡牌的交互与超时规则处理。
 
-次数限制必须写明统计对象；「每张牌每局一次」与「每名玩家每局一次」不能混用。阶段、条件和限制共同决定效果是否触发，不能仅根据名称或主动／被动类型推断。
+次数限制必须写明统计对象；「每张牌每局一次」与「每名玩家每局一次」不能混用。阶段、事件、条件和限制共同决定效果是否触发。
 
 ---
 
@@ -678,13 +678,14 @@ public:
 | 1000 | 10% | +1 分数 |
 | 5999 | 59.99% | 无 |
 
-**兼容性约束**：主动摆件（`active_*`）不能带 `output_multiplier ≠ 1` 的镀层 →
-**镭射永远不会出现在主动摆件上**（否则"用一次给两倍"会指数爆炸）。
+上述镀层为历史草案。当前功能牌统一被动触发，旧 `active_*` 效果及其镀层兼容性限制不作为现行规则；具体组合待卡牌与镀层规则审定。
 镀层奖励的效果键必须以 `edition_` 开头，防止递归触发。
 
 ### 9.4 功能牌触发时机草案
 
 功能牌在每个阶段都可能有效果，完整规则暂不展开。下表只保留现有的触发设想，不作为限制触发阶段的完整清单。
+
+所有功能牌均由系统响应事件并被动判断触发，旧 `active_*` 主动点击入口不启用。
 
 | 前缀 | 触发点 | 例子 |
 |---|---|---|
@@ -693,7 +694,6 @@ public:
 | `first_*` | 本局首次满足 | 具体触发条件与效果待补充 |
 | `round_end_*` | 有人出完牌、结算前 | 花洒（随机抬售价） |
 | `settlement_*` | 结算发奖时 | 招财猫（金币翻倍） |
-| `active_*` | 玩家主动点击 | 金酒（弃大牌换 A） |
 | `shop_*` | 商店阶段 | 罐头架（全场 -2 金币） |
 
 **执行时的中断规则**（很重要）：每个摆件效果执行完都会检查
@@ -705,18 +705,17 @@ if has_pending_interaction_action(): return  # 效果可能要求玩家选择
 
 所以**一个摆件触发后可能中断后续摆件的触发**，顺序取决于摆件在槽位里的排列。
 
-### 9.5 主动摆件的使用规则
+### 9.5 被动功能牌的触发与交互
 
-可用性检查（按顺序）：
+系统收到事件时，对对应功能牌按以下顺序检查：
 
-1. 摆件存在且效果键以 `active_` 开头。
-2. 本局使用次数未耗尽（`uses_per_round`，全部主动件都是 **1**）。
-3. 在当前回合区间内：`min_owner_turn ≤ 回合数 ≤ max_owner_turn`。
-   - `get_player_turn_number()` = 已完成回合数 + 1。
-   - 大量主动件的 `max_owner_turn = 2`，即"**仅限自己的前 2 个出牌回合**"。
-4. 没有被禁用（干扰器会让对手随机 1 件失效到本局结束）。
+1. 功能牌仍由该玩家持有，且 `isEnabled` 为真。
+2. 当前阶段与事件分别符合 `triggerPhases` 和 `triggerEvents`。
+3. 当前计次周期的使用次数尚未达到 `usageLimit`；空值表示不限次数。
+4. 调用 `shouldTrigger(context)` 判断该牌的具体条件。
+5. 条件满足时调用 `applyEffect(context)`；按该牌规则记录次数、处理消耗，并在 `resetScope` 指定的边界重置次数。
 
-使用后若需要选目标/选牌，会进入**阻塞式交互**：
+被动效果触发后若需要选目标或选牌，会进入**阻塞式交互**；这是效果处理的一部分，不是主动发动技能：
 
 | 交互 | 变量 | 说明 |
 |---|---|---|
@@ -724,7 +723,7 @@ if has_pending_interaction_action(): return  # 效果可能要求玩家选择
 | 选摆件 | `pending_decor_target_action` | 恶魔三叉戟 |
 | 选手牌 | `pending_hand_selection_action` | 爪爪麻将、丢弃选牌 |
 | 二选一 | `pending_exchange_choice_action` | 交换/拿走 |
-| 卡包 5 选 1 | `pending_card_pack_choices` | 见 §10 |
+| 卡包选牌 | `pending_card_pack_choices` | 见 §10 的当前卡包规则 |
 
 **交互未完成时不能出牌也不能过牌**，报错「请先完成当前摆设交互。」。
 联机时这个状态必须严格同步，否则会 desync。
@@ -744,7 +743,7 @@ if has_pending_interaction_action(): return  # 效果可能要求玩家选择
 
 ### 9.7 摆件效果草案清单（63 件）
 
-以下保留效果设想；其中分数、金币及转换收益暂不参与 §7 的基础计分与金币规则。
+以下保留历史效果设想；其中分数、金币及转换收益暂不参与 §7 的基础计分与金币规则。表中的「主动」描述均为未启用的旧方案，需要另行设计被动触发事件和条件并审定，不能直接作为当前功能牌使用。
 
 > 标记说明：`↑xxx` = 由 xxx 升级而来；`[新]` = 新手池（`beginner_enabled`）。
 
@@ -839,31 +838,83 @@ if has_pending_interaction_action(): return  # 效果可能要求玩家选择
 
 ### 9.9 Funcards 抽象基类
 
-功能牌使用 C++ 抽象基类 `Funcards` 表示。C++ 通过纯虚函数定义抽象类，由具体功能牌的派生类实现触发判断和效果执行：
+功能牌使用 C++ 抽象基类 `Funcards` 表示，全部为被动效果。C++ 通过纯虚函数定义抽象类，由具体功能牌的派生类实现触发判断和效果执行；不设置主动／被动分类字段或主动发动入口。
+
+数据分为固定定义和每张牌实例的运行状态。当前先在同一个类中声明，后续可将同种牌共用的固定定义独立存储：
 
 ```cpp
+#include <cstdint>
 #include <optional>
+#include <string>
+#include <vector>
+
+enum class Rarity;
+enum class Phase;
+enum class EventType;
+enum class ResetScope;
+enum class ConsumePolicy;
+
+struct TriggerContext;
+struct EffectContext;
 
 class Funcards {
 public:
     virtual ~Funcards() = default;
 
-    virtual bool shouldTrigger() = 0;  // 判断是否触发
-    virtual void applyEffect() = 0;    // 执行触发效果
+    virtual bool shouldTrigger(const TriggerContext& context) const = 0;
+    virtual void applyEffect(EffectContext& context) = 0;
+
+    // 固定定义
+    std::string cardId;                    // 功能牌种类编号
+    std::string name;                      // 显示名称
+    std::string description;               // 效果说明
+    Rarity rarity;                        // 稀有度
+    int basePrice;                        // 基础购买价格
+    std::vector<Phase> triggerPhases;      // 允许被动触发的阶段
+    std::vector<EventType> triggerEvents;  // 需要判断的事件
+    std::optional<int> usageLimit;         // 每个计次周期的使用上限
+    ResetScope resetScope;                // 使用次数的重置范围
+    ConsumePolicy consumePolicy;          // 消耗时机或持续保留
 
     std::optional<int> multiplier;     // 倍数
     std::optional<int> baseValue;      // 基数
+
+    // 每张牌实例的运行状态
+    std::uint64_t instanceId;          // 实例唯一编号
+    int timesUsed = 0;                 // 当前计次周期内已使用次数
+    int purchasePrice;                // 实际购入价格
+    bool isEnabled = true;            // 当前是否有效
 };
 ```
 
 | 含义 | 名称 | 类型 |
 |---|---|---|
-| 是否触发（判断逻辑） | `shouldTrigger` | `virtual bool`，纯虚函数 |
-| 执行触发效果（执行逻辑） | `applyEffect` | `virtual void`，纯虚函数 |
+| 是否触发（判断逻辑） | `shouldTrigger` | 接收只读 `TriggerContext`，返回 `bool` 的纯虚函数；函数本身为 `const` |
+| 执行触发效果（执行逻辑） | `applyEffect` | 接收可修改的 `EffectContext`，返回 `void` 的纯虚函数 |
+| 功能牌种类编号 | `cardId` | `std::string` |
+| 显示名称 | `name` | `std::string` |
+| 效果说明 | `description` | `std::string` |
+| 稀有度 | `rarity` | `Rarity` 枚举 |
+| 基础购买价格 | `basePrice` | `int` |
+| 允许被动触发的阶段 | `triggerPhases` | `std::vector<Phase>` |
+| 需要判断的事件 | `triggerEvents` | `std::vector<EventType>` |
+| 使用次数上限 | `usageLimit` | `std::optional<int>`；空值表示不限次数 |
+| 次数重置范围 | `resetScope` | `ResetScope` 枚举 |
+| 消耗规则 | `consumePolicy` | `ConsumePolicy` 枚举 |
 | 倍数 | `multiplier` | `std::optional<int>` |
 | 基数 | `baseValue` | `std::optional<int>` |
+| 实例唯一编号 | `instanceId` | `std::uint64_t` |
+| 当前周期内已使用次数 | `timesUsed` | `int`，初始为 0 |
+| 实际购入价格 | `purchasePrice` | `int` |
+| 当前是否有效 | `isEnabled` | `bool`，初始为 `true` |
 
-`shouldTrigger()` 返回是否满足触发条件；满足条件时再调用 `applyEffect()` 执行效果。两者的具体逻辑由派生类分别实现，所需的上下文参数待后续设计。虚析构函数用于通过基类指针销毁派生类对象。
+`TriggerContext` 提供当前阶段、事件、出牌及相关玩家等只读信息。系统完成通用检查后，通过 `shouldTrigger(context)` 判断具体条件；满足条件时再调用 `applyEffect(context)`，使用 `EffectContext` 提供的操作修改分数、金币、手牌等状态。上下文结构的具体成员待后续设计。虚析构函数用于通过基类指针销毁派生类对象。
+
+`resetScope` 表示每次事件、每回合、每巡、每局、每次商店或整场比赛的计次范围，整场比赛的次数不在局间重置。`consumePolicy` 区分持续保留、触发时消耗、效果成功后消耗等规则，具体计次与成功标准由卡牌定义。
+
+`cardId` 标识牌的种类，同一种牌共用编号；`instanceId` 区分实际持有的每一张牌，由系统分配。`basePrice` 表示牌种的基础价格，`purchasePrice` 记录实例的实际购入成本，出售价格按 §8 的规则计算。暂时禁用由 `isEnabled` 表示，恢复时重新启用。
+
+示例中的枚举和上下文使用前置声明；枚举取值及结构定义待后续完善。牌实例创建时需由系统填入编号、价格及对应枚举值。
 
 倍数或基数不适用于某张功能牌时，对应成员使用 `std::nullopt`；空值不等同于数值 0。具体数值、计算方式及触发时机另行确定。
 
@@ -1068,11 +1119,10 @@ sealed_qeawasd_left_arm / right_arm / left_foot / right_foot / torso
 - 超时会由主机自动解算（默认 30 秒，逗猫棒 10 秒）。
 - 这是最容易产生"卡住"体验的地方，也是联机最需要一致的状态。
 
-### 14.5 主动摆件的"前 2 回合"怎么算
+### 14.5 被动功能牌的回合条件怎么算
 
 `get_player_turn_number() = 已完成回合数 + 1`。
-你第一次行动时是第 1 回合，第二次是第 2 回合——**"前 2 个出牌回合"= 你前两次行动机会**，
-不是"全局第 2 回合"。过牌也算一次行动。
+如果被动功能牌的触发条件限定「自己的前 2 个回合」，指该玩家前两次行动机会，而非全局第 2 回合。过牌也算一次行动。满足回合条件后仍需由系统检查对应事件和其他触发条件，不提供主动发动操作。
 
 ### 14.6 掉线与中途退出
 
