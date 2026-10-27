@@ -837,6 +837,36 @@ if has_pending_interaction_action(): return  # 效果可能要求玩家选择
 
 恶魔三叉戟的触发条件待补充。「明天见」及零食抽屉等涉及王的效果，统一按不区分大小的王计数。
 
+### 9.9 Funcards 抽象基类
+
+功能牌使用 C++ 抽象基类 `Funcards` 表示。C++ 通过纯虚函数定义抽象类，由具体功能牌的派生类实现触发判断和效果执行：
+
+```cpp
+#include <optional>
+
+class Funcards {
+public:
+    virtual ~Funcards() = default;
+
+    virtual bool shouldTrigger() = 0;  // 判断是否触发
+    virtual void applyEffect() = 0;    // 执行触发效果
+
+    std::optional<int> multiplier;     // 倍数
+    std::optional<int> baseValue;      // 基数
+};
+```
+
+| 含义 | 名称 | 类型 |
+|---|---|---|
+| 是否触发（判断逻辑） | `shouldTrigger` | `virtual bool`，纯虚函数 |
+| 执行触发效果（执行逻辑） | `applyEffect` | `virtual void`，纯虚函数 |
+| 倍数 | `multiplier` | `std::optional<int>` |
+| 基数 | `baseValue` | `std::optional<int>` |
+
+`shouldTrigger()` 返回是否满足触发条件；满足条件时再调用 `applyEffect()` 执行效果。两者的具体逻辑由派生类分别实现，所需的上下文参数待后续设计。虚析构函数用于通过基类指针销毁派生类对象。
+
+倍数或基数不适用于某张功能牌时，对应成员使用 `std::nullopt`；空值不等同于数值 0。具体数值、计算方式及触发时机另行确定。
+
 ---
 
 ## 10. 卡包与拓展牌
