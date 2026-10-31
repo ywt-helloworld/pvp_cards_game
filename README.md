@@ -4,7 +4,7 @@
 
 ## 游戏流程
 
-![游戏流程图](images/game-flow.png)
+![游戏流程图](images/game-flow-7ffafa16c88f.png)
 
 ## 目录
 
