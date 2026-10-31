@@ -15,7 +15,7 @@
 <text x="640" y="902.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">领出必须出牌；跟牌可合法出牌或过牌</text>
 <rect x="315.0" y="1005.0" width="650" height="110" rx="14" fill="#F5F8FA" stroke="#607685" stroke-width="2"/>
 <text x="640" y="1040.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="30" font-weight="700" fill="#172B3A">② 效果结算</text>
-<text x="640" y="1087.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">结算出牌 / 过牌效果；成功出牌获得分数与金币</text>
+<text x="640" y="1087.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">结算出牌 / 过牌效果</text>
 <polygon points="640,1165.0 940.0,1230 640,1295.0 340.0,1230" fill="#F0F7F9" stroke="#286B85" stroke-width="2"/>
 <text x="640" y="1230.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="27" font-weight="700" fill="#172B3A">是否有人打完手牌？</text>
 <polygon points="640,1370.0 965.0,1450 640,1530.0 315.0,1450" fill="#F0F7F9" stroke="#286B85" stroke-width="2"/>
@@ -58,9 +58,7 @@
 <polygon points="1370,1310 1364.548143207679,1297.1051460839597 1375.451856792321,1297.1051460839597" fill="#607685"/>
 <text x="1040" y="1200.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#286B85">是：本局结束</text>
 <rect x="1100.0" y="1310.0" width="540" height="150" rx="14" fill="#EAF3F6" stroke="#286B85" stroke-width="2"/>
-<text x="1370" y="1365.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="30" font-weight="700" fill="#172B3A">局末结算</text>
-<text x="1370" y="1394.6" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">分数：赢家基准分减去剩牌数，最低 0</text>
-<text x="1370" y="1429.4" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">金币：每人统一获得 money(round)</text>
+<text x="1370" y="1385.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="30" font-weight="700" fill="#172B3A">局末结算</text>
 <polygon points="1370,1510.0 1615.0,1580 1370,1650.0 1125.0,1580" fill="#F0F7F9" stroke="#286B85" stroke-width="2"/>
 <text x="1370" y="1560.425" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="27" font-weight="700" fill="#172B3A">是否完成</text>
 <text x="1370" y="1599.575" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="27" font-weight="700" fill="#172B3A">规定游戏局数？</text>
