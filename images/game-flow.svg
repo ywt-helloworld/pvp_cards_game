@@ -71,7 +71,4 @@
 <polyline points="1615,1580 1725,1580 1725,365 965,365" fill="none" stroke="#607685" stroke-width="3" stroke-linejoin="round"/>
 <polygon points="965,365 977.8948539160403,359.5481432076789 977.8948539160403,370.4518567923211" fill="#607685"/>
 <text x="1640" y="345.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#286B85">否：下一局</text>
-<text x="900" y="1960.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="25" font-weight="400" fill="#526675">牌堆不足时按序摸完即停；耗尽后不补牌、不重洗，继续打到有人出完。</text>
-<text x="900" y="2010.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">第 r 局：赢家基准分 S(r) = 16 + 5 × (r − 1)；基础金币 money(r) = 8 + 5 × (r − 1)。</text>
-<text x="900" y="2055.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">最后一局后不开商店。超时与掉线按规则自动处理，重连后恢复控制权。</text>
 </svg>
