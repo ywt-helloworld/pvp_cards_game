@@ -4,7 +4,7 @@
 
 ## 游戏流程
 
-
+![游戏流程图](images/game-flow.png)
 
 ## 目录
 

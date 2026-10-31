@@ -1,0 +1,95 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="2100" viewBox="0 0 1800 2100"><rect width="100%" height="100%" fill="white"/>
+<text x="900" y="65.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="46" font-weight="700" fill="#172B3A">游戏流程</text>
+<text x="900" y="115.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="25" font-weight="400" fill="#526675">比赛 → 局 → 巡 → 玩家回合</text>
+<rect x="315.0" y="165.0" width="650" height="90" rx="14" fill="#EAF3F6" stroke="#286B85" stroke-width="2"/>
+<text x="640" y="190.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="30" font-weight="700" fill="#172B3A">房间人满，比赛开始</text>
+<text x="640" y="237.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">2～4 名真人；初始化金币与槽位</text>
+<rect x="315.0" y="310.0" width="650" height="110" rx="14" fill="#F5F8FA" stroke="#607685" stroke-width="2"/>
+<text x="640" y="345.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="30" font-weight="700" fill="#172B3A">局前商店</text>
+<text x="640" y="392.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">购物 / 开包 / 拓展牌 / 牌型加强 / 设施</text>
+<rect x="315.0" y="475.0" width="650" height="110" rx="14" fill="#F5F8FA" stroke="#607685" stroke-width="2"/>
+<text x="640" y="510.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="30" font-weight="700" fill="#172B3A">本局开始</text>
+<text x="640" y="557.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">每人发 7 张牌；确定本局先手，处理开局效果</text>
+<rect x="315.0" y="640.0" width="650" height="110" rx="14" fill="#F5F8FA" stroke="#607685" stroke-width="2"/>
+<text x="640" y="675.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="30" font-weight="700" fill="#172B3A">新的一巡开始</text>
+<text x="640" y="722.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">首巡由本局先手领出；之后由牌权获得者领出</text>
+<rect x="315.0" y="810.0" width="650" height="130" rx="14" fill="#F5F8FA" stroke="#607685" stroke-width="2"/>
+<text x="640" y="855.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="30" font-weight="700" fill="#172B3A">① 出牌决策</text>
+<text x="640" y="902.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">领出必须出牌；跟牌可合法出牌或过牌</text>
+<rect x="315.0" y="1005.0" width="650" height="110" rx="14" fill="#F5F8FA" stroke="#607685" stroke-width="2"/>
+<text x="640" y="1040.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="30" font-weight="700" fill="#172B3A">② 效果结算</text>
+<text x="640" y="1087.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">结算出牌 / 过牌效果；成功出牌获得分数与金币</text>
+<polygon points="640,1165.0 940.0,1230 640,1295.0 340.0,1230" fill="#F0F7F9" stroke="#286B85" stroke-width="2"/>
+<text x="640" y="1230.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="27" font-weight="700" fill="#172B3A">是否有人打完手牌？</text>
+<polygon points="640,1370.0 965.0,1450 640,1530.0 315.0,1450" fill="#F0F7F9" stroke="#286B85" stroke-width="2"/>
+<text x="640" y="1431.15" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="26" font-weight="700" fill="#172B3A">其余玩家均不出牌，</text>
+<text x="640" y="1468.85" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="26" font-weight="700" fill="#172B3A">行动回到最近出牌者？</text>
+<rect x="315.0" y="1590.0" width="650" height="120" rx="14" fill="#F5F8FA" stroke="#607685" stroke-width="2"/>
+<text x="640" y="1630.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="30" font-weight="700" fill="#172B3A">本巡结束，最近出牌者获得牌权</text>
+<text x="640" y="1677.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">从该玩家开始，逆时针每人摸 1 张</text>
+<rect x="315.0" y="1780.0" width="650" height="100" rx="14" fill="#F5F8FA" stroke="#607685" stroke-width="2"/>
+<text x="640" y="1830.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="30" font-weight="700" fill="#172B3A">由牌权获得者领出下一巡</text>
+<polyline points="640,255 640,310" fill="none" stroke="#607685" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="640,310 634.5481432076789,297.1051460839596 645.4518567923211,297.1051460839596" fill="#607685"/>
+<polyline points="640,420 640,475" fill="none" stroke="#607685" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="640,475 634.5481432076789,462.1051460839596 645.4518567923211,462.1051460839596" fill="#607685"/>
+<polyline points="640,585 640,640" fill="none" stroke="#607685" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="640,640 634.5481432076789,627.1051460839597 645.4518567923211,627.1051460839597" fill="#607685"/>
+<polyline points="640,750 640,810" fill="none" stroke="#607685" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="640,810 634.5481432076789,797.1051460839597 645.4518567923211,797.1051460839597" fill="#607685"/>
+<polyline points="640,940 640,1005" fill="none" stroke="#607685" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="640,1005 634.5481432076789,992.1051460839597 645.4518567923211,992.1051460839597" fill="#607685"/>
+<polyline points="640,1115 640,1165" fill="none" stroke="#607685" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="640,1165 634.5481432076789,1152.1051460839597 645.4518567923211,1152.1051460839597" fill="#607685"/>
+<polyline points="640,1295 640,1370" fill="none" stroke="#607685" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="640,1370 634.5481432076789,1357.1051460839597 645.4518567923211,1357.1051460839597" fill="#607685"/>
+<polyline points="640,1530 640,1590" fill="none" stroke="#607685" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="640,1590 634.5481432076789,1577.1051460839597 645.4518567923211,1577.1051460839597" fill="#607685"/>
+<polyline points="640,1710 640,1780" fill="none" stroke="#607685" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="640,1780 634.5481432076789,1767.1051460839597 645.4518567923211,1767.1051460839597" fill="#607685"/>
+<text x="680" y="1330.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#286B85">否</text>
+<text x="680" y="1560.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#286B85">是</text>
+<polyline points="315,1450 245,1450 245,875 315,875" fill="none" stroke="#607685" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="315,875 302.1051460839596,880.4518567923211 302.1051460839596,869.5481432076789" fill="#607685"/>
+<text x="190" y="1143.75" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="25" font-weight="400" fill="#286B85">否</text>
+<text x="190" y="1180.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="25" font-weight="400" fill="#286B85">逆时针</text>
+<text x="190" y="1216.25" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="25" font-weight="400" fill="#286B85">下一家</text>
+<polyline points="315,1830 90,1830 90,695 315,695" fill="none" stroke="#607685" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="315,695 302.1051460839596,700.4518567923211 302.1051460839596,689.5481432076789" fill="#607685"/>
+<text x="157" y="1780.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#286B85">下一巡</text>
+<polyline points="940,1230 1370,1230 1370,1310" fill="none" stroke="#607685" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1370,1310 1364.548143207679,1297.1051460839597 1375.451856792321,1297.1051460839597" fill="#607685"/>
+<text x="1040" y="1200.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#286B85">是：本局结束</text>
+<rect x="1100.0" y="1310.0" width="540" height="150" rx="14" fill="#EAF3F6" stroke="#286B85" stroke-width="2"/>
+<text x="1370" y="1365.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="30" font-weight="700" fill="#172B3A">局末结算</text>
+<text x="1370" y="1394.6" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">分数：赢家基准分减去剩牌数，最低 0</text>
+<text x="1370" y="1429.4" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">金币：每人统一获得 money(round)</text>
+<polygon points="1370,1510.0 1615.0,1580 1370,1650.0 1125.0,1580" fill="#F0F7F9" stroke="#286B85" stroke-width="2"/>
+<text x="1370" y="1560.425" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="27" font-weight="700" fill="#172B3A">是否完成</text>
+<text x="1370" y="1599.575" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="27" font-weight="700" fill="#172B3A">规定比赛局数？</text>
+<polyline points="1370,1460 1370,1510" fill="none" stroke="#607685" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1370,1510 1364.548143207679,1497.1051460839597 1375.451856792321,1497.1051460839597" fill="#607685"/>
+<polyline points="1370,1650 1370,1750" fill="none" stroke="#607685" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="1370,1750 1364.548143207679,1737.1051460839597 1375.451856792321,1737.1051460839597" fill="#607685"/>
+<text x="1410" y="1700.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#286B85">是</text>
+<rect x="1100.0" y="1750.0" width="540" height="120" rx="14" fill="#EAF3F6" stroke="#286B85" stroke-width="2"/>
+<text x="1370" y="1790.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="30" font-weight="700" fill="#172B3A">比赛结束，比较累计总分</text>
+<text x="1370" y="1837.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">最高分获胜；同分并列冠军</text>
+<polyline points="1615,1580 1725,1580 1725,365 965,365" fill="none" stroke="#607685" stroke-width="3" stroke-linejoin="round"/>
+<polygon points="965,365 977.8948539160403,359.5481432076789 977.8948539160403,370.4518567923211" fill="#607685"/>
+<text x="1640" y="345.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#286B85">否：下一局</text>
+<rect x="1095.0" y="165.0" width="540" height="110" rx="14" fill="#F5F8FA" stroke="#607685" stroke-width="2"/>
+<text x="1365" y="200.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="30" font-weight="700" fill="#172B3A">比赛局数与先手</text>
+<text x="1365" y="247.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">2 / 4 人：8 局；3 人：9 局</text>
+<text x="1365" y="310.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="23" font-weight="400" fill="#526675">首局随机先手，之后按人数蛇形轮换</text>
+<rect x="1095.0" y="480.0" width="540" height="190" rx="14" fill="#FAFBFC" stroke="#CBD5DB" stroke-width="2"/>
+<text x="1365" y="555.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="30" font-weight="700" fill="#172B3A">赖子指定</text>
+<text x="1365" y="584.6" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">含王时，系统列出合法指定方案</text>
+<text x="1365" y="619.4" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">玩家自行选择；超时随机选一项</text>
+<rect x="1095.0" y="795.0" width="540" height="150" rx="14" fill="#FAFBFC" stroke="#CBD5DB" stroke-width="2"/>
+<text x="1365" y="850.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="30" font-weight="700" fill="#172B3A">被动功能牌</text>
+<text x="1365" y="897.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">可以响应各阶段的事件，按卡牌条件生效</text>
+<text x="900" y="1960.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="25" font-weight="400" fill="#526675">牌堆不足时按序摸完即停；耗尽后不补牌、不重洗，继续打到有人出完。</text>
+<text x="900" y="2010.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">第 r 局：赢家基准分 S(r) = 16 + 5 × (r − 1)；基础金币 money(r) = 8 + 5 × (r − 1)。</text>
+<text x="900" y="2055.0" text-anchor="middle" dominant-baseline="central" font-family="Microsoft YaHei,Noto Sans CJK SC,sans-serif" font-size="24" font-weight="400" fill="#526675">最后一局后不开商店。超时与掉线按规则自动处理，重连后恢复控制权。</text>
+</svg>
