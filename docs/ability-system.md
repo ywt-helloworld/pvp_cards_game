@@ -1,6 +1,6 @@
-# 功能牌、技能与生效时机
+# 技能说明
 
-本轮设计沿用用户提出的 `Players`、`Ability`、`FunctionCards` 和布尔时机集合。功能牌承载技能，一个技能属于主动或被动之一；一张牌可以同时拥有两类技能。本文是接口与规则草案，尚未实现对局引擎。
+本文定义技能的主动／被动分类、状态、生效时机、触发与结算规则，以及 C++17 抽象基类 `Ability`。每个技能属于主动或被动之一；功能牌可以承载多个技能。持有者、牌实例、技能容器与 `FunctionCards` 接口见 [功能卡说明](function-cards.md)。本文为设计草案，尚未实现对局引擎。
 
 ## 1. 时机与行为主体分别记录
 
@@ -121,7 +121,6 @@ TurnStart → PlayActionWindow
 ```cpp
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <vector>
 
 enum class Players : std::uint8_t { P1, P2, P3, P4 };
@@ -186,39 +185,14 @@ public:
     // true 表示成功完成约定效果；false 表示未生效。
     virtual bool call_ability(AbilityContext& context) = 0;
 };
-
-class FunctionCards {
-public:
-    FunctionCards(Players owner, std::size_t sequence)
-        : player(owner), seq(sequence) {}
-    virtual ~FunctionCards() = default;
-
-    Players player;
-    std::size_t seq;
-    std::vector<std::unique_ptr<Ability>> abilities;
-    bool available = true;
-    bool usable = true;
-
-    // 被动批量派发：仅执行命中时机和条件的被动技能。
-    // 返回是否至少一个技能成功，不能通过短路跳过后续技能。
-    virtual bool callAbilities(AbilityContext& context) = 0;
-    // 主动请求：仅执行玩家明确选择的一个主动技能。
-    virtual bool callActiveAbility(std::size_t index,
-                                   AbilityContext& context) = 0;
-    virtual bool addAbilities(std::unique_ptr<Ability> ability) = 0;
-    virtual bool deleteAbilities(std::size_t index) = 0;
-    virtual bool abolishAbilities(std::size_t index) = 0;
-};
 ```
 
 `enum class Players` 表示固定座位，2 人或 3 人房间只遍历实际参局座位；枚举存在不表示该座位已加入游戏。枚举 P1 对应固定编号 1，之后按逆时针编号。
-
-`seq` 是持有者范围内单调分配、不重复使用的牌实例编号，`(player, seq)` 标识一张实例；移动槽位不改变编号。牌种编号 `cardId`、名称、说明、稀有度、基础价格、实际购入价格、可选基数和倍率等仍需保留，后续并入 `FunctionCards` 的卡牌元信息，不放进时机掩码。
 
 `AbilityContext` 后续应包含时机、事件 ID、主动请求或被动派发类型、持有者、可空的行为主体、目标、局／巡／回合编号、实际出牌及赖子方案、行为原因、来源链，以及受控的报价和资源修改接口。它不能只提供当前阶段，否则无法区分自己与其他玩家、出牌和不出牌、真实事件和预览查询。
 
 `call_ability()` 加 `= 0` 才是纯虚函数；只写 `virtual` 不会使类成为抽象类。基类需要虚析构，才能通过基类指针正确释放派生对象。原草案中的成员 `time(TOTAL_TIMES)` 改为上面的成员初始化写法，默认所有位为 false。
 
-使用 `unique_ptr` 明确技能由功能牌拥有，添加时转移所有权，删除时由容器释放，避免裸指针的释放责任不清。`deleteAbilities(index)` 表示逻辑移除并在安全点释放；`abolishAbilities(index)` 表示将技能 `available` 设为 false，保留实例用于显示和记录；临时禁用使用 `usable = false`。整张牌废除时设置牌的 `available = false`，所有技能统一被门禁挡住。
+技能由所属功能牌拥有；技能容器、添加、删除、废除及临时禁用的管理规则见 [功能卡说明](function-cards.md#3-技能管理与生命周期)。
 
-上述 `index` 仅适用于服务端当前稳定的技能列表；联机请求需要稳定技能编号及状态版本，不能信任客户端缓存的可变下标。实际调度、稳定 ID、次数与费用管理、交互挂起和事务处理待引擎实现时补齐。
+实际调度、稳定技能 ID、次数与费用管理、交互挂起和事务处理待引擎实现时补齐。
