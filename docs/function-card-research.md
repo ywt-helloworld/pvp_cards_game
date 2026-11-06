@@ -33,18 +33,18 @@
 
 | 样本 | 查到的原作效果 | 由样本归纳的设计作用 | 对本项目的启发 |
 |---|---|---|---|
-| [Chaos the Clown](https://teemo.dev/game-design/balatro/wiki/jokers/chaos-the-clown/) | 每次商店提供 1 次免费刷新 | 用一个槽位改善商店选择质量 | `ShopRefreshQuote` 提供免费额度，成功刷新才消耗；仍计入本店 5 次上限 |
+| [Chaos the Clown](https://teemo.dev/game-design/balatro/wiki/jokers/chaos-the-clown/) | 每次商店提供 1 次免费刷新 | 用一个槽位改善商店选择质量 | 刷新报价时提供免费额度，成功刷新才消耗；仍计入本店 5 次上限 |
 | [Golden Joker](https://teemo.dev/game-design/balatro/wiki/jokers/golden-joker/) | 回合结束获得 4 金钱 | 稳定经济换掉一个得分槽位 | 本项目可用局末金币型被动，与当局得分牌竞争槽位 |
 | [Green Joker](https://teemo.dev/game-design/balatro/wiki/jokers/green-joker/) | 每次出手使自身提供的 Mult 增加 1，每次弃牌减少 1，最低 0 | 成长伴随限制，鼓励特定行为 | 成功出牌增长、不出牌衰减等方向可讨论；必须分别记录成长时点与收益时点 |
 | [Loyalty Card](https://teemo.dev/game-design/balatro/wiki/jokers/loyalty-card/) | 每第 6 次出手提供 ×4 Mult | 让玩家安排蓄力后的爆发手 | 根据出牌次数蓄力，在指定一次奖励结算前消耗；不能每次查询都推进计数 |
 | [Popcorn](https://teemo.dev/game-design/balatro/wiki/jokers/popcorn/) | 初始 +20 Mult，每回合结束减少 4 | 即时强度高但会衰减，促使换牌 | 短期强牌可在局末衰减；收益与衰减是不同技能或不同执行分支 |
 | [Hanging Chad](https://teemo.dev/game-design/balatro/wiki/jokers/hanging-chad/) | 第一张参与计分的出牌额外触发 2 次 | 放大已有单牌收益，让其他卡价值变化 | 可以借鉴有限次数的“额外结算奖励”；不要重复移除手牌、推进回合或确认胜利 |
-| [Four Fingers](https://teemo.dev/game-design/balatro/wiki/jokers/four-fingers/) | 顺子与同花可用 4 张组成 | 改变组牌规则，扩大牌组可行空间 | 改变跟牌或组牌规则应参与 `PlayValidate`，但我们的顺子本来 3 张起，不能照抄成 4 张 |
+| [Four Fingers](https://teemo.dev/game-design/balatro/wiki/jokers/four-fingers/) | 顺子与同花可用 4 张组成 | 改变组牌规则，扩大牌组可行空间 | 改变跟牌或组牌规则应参与出牌合法性校验，但我们的顺子本来 3 张起，不能照抄成 4 张 |
 | [Blueprint](https://teemo.dev/game-design/balatro/wiki/jokers/blueprint/) | 复制右侧小丑牌可复制的能力 | 相邻关系与技能组合成为构筑的一部分 | 复制牌需定义目标、顺序、状态归属和不可复制清单；适合后续批次 |
 
 以上 Mult 指《小丑牌》计分中的倍率部分，+Mult 和 ×Mult 是不同操作；不能把原作的 +20 Mult 直接替换成我们游戏中的 +20 分。
 
-**设计归纳（本文分析）：** 卡池可以同时包含即时收益、持续成长、周期爆发、衰减过渡、经济和规则修正。强度之外，玩家还要比较“何时买、占哪个槽、要配什么、什么时候卖”。一张成长牌往往在一个时机更新计数，在另一个时机提供收益，恰好适合多个 `Handle_Event` 共同组成一张 `FunctionCards`。
+**设计归纳（本文分析）：** 卡池可以同时包含即时收益、持续成长、周期爆发、衰减过渡、经济和规则修正。强度之外，玩家还要比较“何时买、占哪个槽、要配什么、什么时候卖”。一张成长牌往往在一个时机更新计数，在另一个时机提供收益，恰好适合一张功能牌包含多个技能。
 
 ## 4. 映射到我们的七类时机
 
@@ -76,8 +76,8 @@
 
 ## 6. 逐张卡牌的下一步模板
 
-逐张卡牌模板统一维护在 [功能卡说明](function-cards.md#5-逐张功能卡的说明模板)。第一批正式设计需补齐这些字段，再接入商店。
+逐张卡牌模板统一维护在 [功能卡说明](../design.md#45-逐张功能卡的说明模板)。第一批正式设计需补齐这些字段，再接入商店。
 
-主动／被动分类、生效时机、`Context` 事件参数、事件处理规则与 `Handle_Event::handle_event` 接口见 [技能说明](ability-system.md)；持有者、实例编号、技能容器、牌级状态与 `FunctionCards` 接口见 [功能卡说明](function-cards.md)。
+具体卡牌的技能、持有与生命周期可参照 [design.md](../design.md) 中的统一设计。
 
-`Event`、`Condition`、只读 `Context` 及处理器返回事件的闭环见 [事件与状态机说明](event-system.md)。
+全部代码设计统一维护在 [design.md](../design.md)。
