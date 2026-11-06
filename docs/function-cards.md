@@ -2,14 +2,14 @@
 
 功能卡（下文也称功能牌）是放入玩家槽位并持续持有的卡牌实例，由 C++17 抽象基类 `FunctionCards` 表示。一张功能卡可以包含多个技能，也可以同时包含主动与被动技能。
 
-技能分类、生效时机、条件判断、事件结算和 `Ability` 接口统一见 [技能说明](ability-system.md)。本文为设计草案，尚未实现功能卡与对局引擎。
+技能分类、生效时机、事件参数、事件处理规则和 `Ability` 接口统一见 [技能说明](ability-system.md)。本文为设计草案，尚未实现功能卡与对局引擎。
 
 ## 1. 功能卡与技能的关系
 
 功能卡负责记录“谁持有这张牌、这张牌是哪一个实例、包含哪些技能、整张牌当前是否有效”；各个技能分别记录自己的发动方式、时机、状态和具体效果。
 
-- 被动事件到来时，功能卡仅派发命中时机和条件的被动技能。
-- 玩家主动发动时，仅调用其明确选择的一个主动技能，不把该牌的其他主动技能一起执行。
+- 功能卡统一通过 `handle_event(Context&)` 接收事件；被动事件到来时，按顺序派发给相关被动技能，由各处理器读取上下文并判断是否处理。
+- 主动请求同样封装为 `Context`，先核对请求玩家、目标牌与目标技能，再只派发给选定的主动技能。
 - 整张牌的状态与技能自身的状态共同限制执行；牌级检查通过后仍需执行 [技能发动条件检查](ability-system.md#4-主动被动和状态)。
 - 同时触发的牌按槽位顺序结算，牌内按技能顺序结算；完整事件顺序见 [技能结算规则](ability-system.md#3-结算顺序与边界)。
 
@@ -33,8 +33,7 @@
 
 | 操作 | 接口 | 说明 |
 |---|---|---|
-| 被动派发 | `callAbilities(context)` | 遍历符合条件的被动技能；返回是否至少一个成功，不能通过短路跳过后续技能 |
-| 主动调用 | `callActiveAbility(index, context)` | 只执行玩家选择的一个主动技能 |
+| 事件处理 | `handle_event(context)` | 被动事件按顺序派发；主动请求仅派发给上下文指定的技能；返回是否至少一个处理器成功，不能通过短路跳过后续处理器 |
 | 添加技能 | `addAbilities(ability)` | 转移技能所有权，加入容器 |
 | 删除技能 | `deleteAbilities(index)` | 逻辑移除，并在结算安全点释放 |
 | 废除技能 | `abolishAbilities(index)` | 将该技能的 `available` 设为 false，保留实例用于显示与记录 |
@@ -43,7 +42,7 @@
 
 派发时冻结候选列表，结算中新增技能从后续事件开始参与；已被禁用、废除或移除的候选跳过。物理删除需延迟到安全点，详见 [技能结算规则](ability-system.md#3-结算顺序与边界)。
 
-上述 `index` 仅适用于服务端当前稳定的技能列表；联机请求需要稳定技能编号及状态版本，不能信任客户端缓存的可变下标。实际调度、稳定 ID、次数与费用管理、交互挂起和事务处理待引擎实现时补齐。
+管理接口中的 `index` 以及 `Context.requestedAbilityIndex` 仅适用于服务端当前稳定的技能列表；联机请求需要稳定技能编号及状态版本，不能信任客户端缓存的可变下标。实际调度、稳定 ID、次数与费用管理、交互挂起和事务处理待引擎实现时补齐。
 
 
 装备与移除分别使用 `FunctionCardEquipped`、`FunctionCardRemoved` 事件，具体边界见 [技能时机表](ability-system.md#2-第一版时机表)。持续效果的来源随装备、移除、失效和恢复更新。
@@ -69,19 +68,18 @@ public:
     bool available = true;
     bool usable = true;
 
-    // 被动批量派发：仅执行命中时机和条件的被动技能。
-    // 返回是否至少一个技能成功，不能通过短路跳过后续技能。
-    virtual bool callAbilities(AbilityContext& context) = 0;
-    // 主动请求：仅执行玩家明确选择的一个主动技能。
-    virtual bool callActiveAbility(std::size_t index,
-                                   AbilityContext& context) = 0;
+    // 统一事件入口；根据 context.source 与请求目标选择技能。
+    // 返回是否至少一个技能成功处理，不能短路跳过后续处理器。
+    virtual bool handle_event(Context& context) = 0;
     virtual bool addAbilities(std::unique_ptr<Ability> ability) = 0;
     virtual bool deleteAbilities(std::size_t index) = 0;
     virtual bool abolishAbilities(std::size_t index) = 0;
 };
 ```
 
-基类提供虚析构函数，以便通过基类指针正确释放派生实例。接口目前只定义数据与调用关系，具体功能卡由派生类实现。
+基类提供虚析构函数，以便通过基类指针正确释放派生实例。`handle_event` 是唯一的对外技能派发入口，添加、删除和废除仍是独立的实例管理操作。接口目前只定义数据与调用关系，具体功能卡由派生类实现。
+
+处理顺序：先检查牌仍被持有且 `available/usable` 为 true、`context.owner` 与 `player` 一致；被动事件按技能顺序调用被动处理器。主动请求要求 `context.actor == player`、`requestedCardSeq == seq` 且 `requestedAbilityIndex` 有效，只调用该位置的主动处理器。请求目标不匹配或不合法时返回 false，不退回为批量派发。联机仍使用稳定技能标识和状态版本定位，再由服务端映射到当前下标。
 
 ## 5. 逐张功能卡的说明模板
 
@@ -89,7 +87,8 @@ public:
 名称／牌种编号：
 价格／稀有度／出售成本规则：
 技能 A：主动或被动
-  时机掩码：
+  响应事件／时机掩码：
+  Context 所需参数与处理结果：
   行为主体范围：Self / Others / Any
   效果目标：
   发动条件与具体效果：

@@ -78,4 +78,4 @@
 
 逐张卡牌模板统一维护在 [功能卡说明](function-cards.md#5-逐张功能卡的说明模板)。第一批正式设计需补齐这些字段，再接入商店。
 
-主动／被动分类、生效时机、条件检查、结算规则与 `Ability` 接口见 [技能说明](ability-system.md)；持有者、实例编号、技能容器、牌级状态与 `FunctionCards` 接口见 [功能卡说明](function-cards.md)。
+主动／被动分类、生效时机、`Context` 事件参数、事件处理规则与 `Ability::handle_event` 接口见 [技能说明](ability-system.md)；持有者、实例编号、技能容器、牌级状态与 `FunctionCards` 接口见 [功能卡说明](function-cards.md)。
