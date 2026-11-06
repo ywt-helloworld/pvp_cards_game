@@ -8,6 +8,7 @@
 
 - [1. 总体架构](#1-总体架构)
 - [2. 事件与状态机](#2-事件与状态机)
+- [2.7 全部事件清单与派生类](#27-全部事件清单与派生类)
 - [3. 技能事件处理](#3-技能事件处理)
 - [4. 功能卡](#4-功能卡)
 - [5. 扑克牌 Poker](#5-扑克牌-poker)
@@ -22,8 +23,8 @@
 网络操作 / 定时器 / 连接回调 / 业务动作
   → EventListener 归一输入或发布可信事件
   → Condition 接收并校验：商店请求排队，局内普通操作直接进入当前结算
-  → 生成只读 Context，调用选定的 Handle_Event
-  → 返回一个新 Event，或 std::nullopt
+  → 更新本房间共享 Context，向选定的 Handle_Event 提供只读视图
+  → 返回一个新 Event，或 nullptr
   → Condition 执行合法效果，生成后续事件并继续调度
   → 完成结算，向相关客户端同步结果
 ```
@@ -40,14 +41,14 @@
 
 ```text
 Event
-  → Condition 接收，检查当前状态并生成 Context
+  → Condition 接收，检查当前状态并更新共享 Context
   → 选择功能卡中的 Handle_Event，调用 handle_event(context)
-  → 返回一个新 Event，或 std::nullopt
+  → 返回一个新 Event，或 nullptr
   → Condition 将新 Event 纳入当前结算链，执行效果或继续派发
   → 当前事件链完成后继续原事件、后续阶段与状态转移
 ```
 
-`Handle_Event` 返回事件，`Condition` 负责继续驱动。处理器不自行调用 `Condition::on_event` 或递归调用其他处理器，也不直接修改游戏资源；效果用返回事件表达。`std::nullopt` 表示本处理器没有输出，状态机继续处理其他候选，当前操作的全部结算帧完成后结束该次结算。
+`Handle_Event` 返回事件，`Condition` 负责继续驱动。处理器不自行调用 `Condition::on_event` 或递归调用其他处理器，也不直接修改游戏资源；效果用返回事件表达。`nullptr` 表示本处理器没有输出，状态机继续处理其他候选，当前操作的全部结算帧完成后结束该次结算。
 
 | 对象 | 职责 |
 |---|---|
@@ -62,18 +63,22 @@ Event
 
 ### 2.2 Event 与 Context
 
-事件分为两类，均使用 `Event`：
+所有事件继承抽象基类 `Event`，按职责分为 `RequestEvent`、`SignalEvent`、`EffectEvent`、`ControlEvent` 四类中间基类，再为每个具体事件定义具名派生类。完整清单见 [全部事件清单与派生类](#27-全部事件清单与派生类)。
 
-- `Signal`：通知一个对局时机已经到达，或承载已校验的主动请求。`Condition` 为它选择候选处理器。
-- `Effect`：处理器返回的具体效果请求，例如增加分数、修正待结算分数、修正报价。`Condition` 校验并执行，不把它再次当作原始出牌事件派发。
+- Request：玩家意图或查询，先验证，不代表行为已经成功。
+- Signal：服务端确认的业务事实，或已获准的一次主动技能调用，按时机匹配处理器。
+- Effect：业务流程或处理器提出的具体效果请求，由 Condition 校验并执行。
+- Control：连接、计时器、拒绝和同步结果，不直接当作成功行为触发功能卡。
 
-`Timing` 仍沿用现有的 34 个时机，取值不变。时机描述事件的精确边界；`GamePhase` 表示状态机当前所处的大阶段，两者分别记录。`EffectData.value` 的含义由 `EffectType` 决定，实际效果字段随卡牌补齐。
+原有 34 个 `Timing` 编号保持不变，新增 29 个业务通知追加在末尾，`TOTAL_TIMES = 63`。只有 Signal 参与技能时机匹配；阶段 `GamePhase` 仍由 Condition 集中维护。请求、控制和效果各自拥有专属参数，不再把所有参数塞进一个平铺 Event。
 
-`Context` 包含只读的 `event`、`game`，以及当前处理器的 `owner`。需要事件类型、行为者或主动目标时，读取 `context.event`；当前待结算奖励和报价由 `Condition` 生成快照，分别放在 `context.reward`、`context.shop`。
+每个房间的 Condition 只创建一份 `Context` 并反复更新；单房间运行时总共只有一份。它是该房间全局共享的调用现场，通过 `Condition::context()` 提供只读访问，不使用跨房间的进程级可变全局对象。
 
-原始事件及其参数在派发期间保持不变。每次轮到一个处理器，`Condition` 基于最新待结算数据重新生成上下文；前一个处理器返回的合法效果完成后，下一个处理器可以看到更新结果。不能让多个独立快照各自写回，覆盖其他处理器的结果。
+Condition 在调用每个处理器之前，直接更新上下文的当前事件、接收技能、待结算奖励与报价快照。处理器只能接收 `const Context&`，不能改业务状态；前一个处理器返回的效果执行后，再刷新同一个 Context 给下一个处理器。
 
-主动技能请求必须来自该牌持有者，指定目标牌和技能，并处于允许窗口；`Condition` 验证后只调用选定处理器。效果执行后产生的新时机通知属于被动 `Signal`，原始主动请求的来源另外保留，不自动要求所有后续技能也为主动技。
+Context 的对象生命周期属于 Condition，内容绑定只在当前一次处理器调用期间有效。处理器返回后清理绑定；等待选择时保存事件、交互 ID 与结算进度，恢复时重新填充上下文，不保存旧 Context 引用。父事件在子链完成后重新绑定，避免玩家、事件和目标串用。
+
+主动请求使用 `ActivateAbilityRequest`，服务端验证后根据窗口生成 `ShopAbilityActivationEvent` 或 `TurnAbilityActivationEvent`，只调用选定技能。效果完成后产生的新业务通知默认是被动通知，来源技能记录在事件元数据中。
 
 ### 2.3 状态与转移
 
@@ -94,7 +99,7 @@ Event
 
 ### 2.4 队列、返回值与结算
 
-`Condition::on_event(Event)` 是统一接收入口，按事件来源与当前状态采用以下接收方式：
+`Condition::on_event(EventPtr)` 是统一接收入口，按事件来源与当前状态采用以下接收方式：
 
 | 输入 | 接收方式 |
 |---|---|
@@ -108,15 +113,15 @@ Event
 
 当前操作内部的事件仍需要顺序和恢复位置。使用循环与显式结算栈：同一通知按玩家、槽位、牌内处理器顺序执行，先保存父通知的处理位置；某处理器返回事件后压入子结算帧，优先执行子链，结束后弹出并继续父通知。这个栈只服务于当前操作的连锁，不保存其他玩家尚未获准的操作，也不依赖 C++ 递归调用。
 
-`std::nullopt` 只表示当前处理器没有输出，不能据此跳过同一通知中的其他候选。只有当前操作的全部事件、候选处理器和必要交互完成，才按规则重新开放操作窗口或推进回合。结算需要等待选择时，保存相应帧和交互信息；挂起与恢复结构待实现时补齐。
+`nullptr` 只表示当前处理器没有输出，不能据此跳过同一通知中的其他候选。只有当前操作的全部事件、候选处理器和必要交互完成，才按规则重新开放操作窗口或推进回合。结算需要等待选择时，保存相应帧和交互信息；挂起与恢复结构待实现时补齐。
 
-`Handle_Event::handle_event(const Context&)` 返回 `std::optional<Event>`：
+`Handle_Event::handle_event(const Context&)` 返回 `EventPtr`：
 
 - 空值：没有输出事件，继续其他候选。
-- 新事件：`Condition` 补入事件 ID、父事件 ID、根事件 ID及具体处理器来源，再校验和处理。
+- 新事件指针：Condition 接管唯一所有权，补入事件 ID、父事件 ID、根事件 ID与具体处理器来源，再校验和处理。
 - 返回了事件但效果执行失败：不视为成功发动，不发奖或扣成功次数；是否采用“尝试即消耗”由具体技能规则明确。
 
-`Condition` 根据效果真正成功的结果记录次数、处理消耗，并在允许时产生 `AbilityResolved` 等后续通知。返回事件本身不代表效果已到账。`Effect` 只在相应阶段可执行，例如 `MultiplyPendingScore` 必须指向仍在处理的奖励结算；报价查询中不得接受直接发放金币或分数的效果。
+`Condition` 根据效果真正成功的结果记录次数、处理消耗，并在允许时产生 `AbilityResolved` 等后续通知。返回事件本身不代表效果已到账。`Effect` 只在相应阶段可执行，例如 `MultiplyPendingScoreEvent` 必须指向仍在处理的奖励结算；报价查询中不得接受直接发放金币或分数的效果。
 
 真实事件 ID 用于去重，后续事件带来源链。同一事件对同一处理器至多派发一次；因果链不得重新进入尚未完成的处理器。状态机需设置有限的事件链处理预算，检测到循环或超限时停止该链并记录原因，具体上限待实际卡牌确定。
 
@@ -128,7 +133,10 @@ Event
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <memory>
 #include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
 enum class Players : std::uint8_t { P1, P2, P3, P4 };
@@ -170,114 +178,302 @@ enum class Timing : std::size_t {
     AbilityResolved = 31,
     FunctionCardEquipped = 32,
     FunctionCardRemoved = 33,
-    Count = 34
+    ShopSlotLocked = 34,
+    ShopSlotUnlocked = 35,
+    BoosterPackOpened = 36,
+    BoosterPackChoiceCompleted = 37,
+    BoosterPackSkipped = 38,
+    ExpansionCardUsed = 39,
+    HandPatternUpgraded = 40,
+    FacilityPurchased = 41,
+    CoinsChanged = 42,
+    ScoreChanged = 43,
+    PlayerStatusChanged = 44,
+    AbilityAdded = 45,
+    AbilityRemoved = 46,
+    AbilityAbolished = 47,
+    AbilityUsabilityChanged = 48,
+    ChoiceOpened = 49,
+    ChoiceResolved = 50,
+    ChoiceExpired = 51,
+    RoundWinnerLocked = 52,
+    DrawPileExhausted = 53,
+    AllShopsClosed = 54,
+    FunctionCardUsabilityChanged = 55,
+    FunctionCardAbolished = 56,
+    AbilityStateChanged = 57,
+    DelayedEffectScheduled = 58,
+    DelayedEffectTriggered = 59,
+    DelayedEffectExpired = 60,
+    CoatingApplied = 61,
+    CardVisibilityChanged = 62,
+    Count = 63
 };
 
 inline constexpr std::size_t TOTAL_TIMES =
     static_cast<std::size_t>(Timing::Count);
+
+using EventId = std::uint64_t;
+using RequestId = std::uint64_t;
+using RoomId = std::uint64_t;
+using ShopId = std::uint64_t;
+using SlotId = std::uint64_t;
+using ProductId = std::uint64_t;
+using PackId = std::uint64_t;
+using ChoiceId = std::uint64_t;
+using ChoiceOptionId = std::uint64_t;
+using CardId = std::uint64_t;
+using DefinitionId = std::uint64_t;
+using StatusId = std::uint64_t;
+using CounterId = std::uint64_t;
+using DelayedEffectId = std::uint64_t;
+using RoundId = std::uint64_t;
+using TrickId = std::uint64_t;
+using TurnId = std::uint64_t;
+using PlayedHandId = std::uint64_t;
+using SettlementId = std::uint64_t;
+using RoundResultId = std::uint64_t;
+using SnapshotId = std::uint64_t;
+using PreviewId = std::uint64_t;
+using ScoreValue = std::int64_t;
+using CoinValue = std::int64_t;
 
 enum class GamePhase : std::uint8_t {
     NotStarted, Shopping, RoundStarting,
     Playing, RoundEnding, Finished
 };
 
+// 原 Signal/Effect 的数值保留，新增类别追加。
 enum class EventKind : std::uint8_t {
-    Signal,  // 对局时机通知或已校验的主动技能请求
-    Effect   // 请求 Condition 执行一个具体效果
+    Signal = 0, Effect = 1, Request = 2, Control = 3
 };
 
-enum class EffectType : std::uint8_t {
-    AddScore,
-    MultiplyPendingScore,
-    ReducePendingShopCost
+enum class EventOrigin : std::uint8_t { Server, Client, Timer, Connection };
+enum class ExecutionMode : std::uint8_t { Commit, Preview };
+enum class HandPattern : std::uint8_t { Single, Pair, Straight, Bomb, StraightFlush };
+enum class Suit : std::uint8_t { Spades, Hearts, Clubs, Diamonds };
+enum class PassReason : std::uint8_t { Chosen, Timeout, Disconnected };
+enum class DrawReason : std::uint8_t { TrickEnd, Skill, Swap };
+enum class RemovalReason : std::uint8_t { Sold, Replaced, Consumed, Deleted };
+enum class ChoiceKind : std::uint8_t { Booster, Wildcard, Target, Option };
+enum class ChoiceReason : std::uint8_t { Manual, Timeout, Disconnected };
+enum class CoatingType : std::uint8_t { Gold, Laser };
+enum class ContinueMode : std::uint8_t { ExtraThree, Endless };
+enum class ShopOperation : std::uint8_t { Purchase, Sale, Refresh, HandUpgrade, Facility };
+enum class RefreshMode : std::uint8_t { Paid, Free };
+enum class Lifetime : std::uint8_t { Event, Turn, Trick, Round, Shop, Game };
+enum class RewardComponent : std::uint8_t { Base, Extra };
+enum class RoundingRule : std::uint8_t { Floor, Ceil, Nearest };
+enum class CounterOperation : std::uint8_t { Add, Set };
+
+struct CardRef {
+    Players owner = Players::P1;
+    std::size_t seq = 0;
+};
+
+struct AbilityRef {
+    CardRef card;
+    std::size_t seq = 0;  // 牌内稳定技能编号，不是 vector 下标
+};
+
+struct WildcardAssignment {
+    CardId cardId = 0;
+    int rank = 0;
+    Suit suit = Suit::Spades;
+};
+
+struct TargetSpec {
+    std::vector<Players> players;
+    std::vector<CardId> cards;
+    std::vector<AbilityRef> abilities;
+    std::optional<int> rank;
+    std::optional<Suit> suit;
 };
 
 struct RewardData {
-    int score = 0;
-    int coins = 0;
+    SettlementId settlementId = 0;
+    ScoreValue score = 0;
+    CoinValue coins = 0;
 };
 
 struct ShopData {
-    int baseCost = 0;
-    int finalCost = 0;
+    SettlementId settlementId = 0;
+    CoinValue baseCost = 0;
+    CoinValue finalCost = 0;
+    std::uint64_t priceVersion = 0;
 };
 
-struct EffectData {
-    EffectType type = EffectType::AddScore;
-    Players target = Players::P1;
-    int value = 0;  // 例如加分数量、整数倍率或减费金额
+struct EventMeta {
+    RoomId roomId = 0;
+    EventId eventId = 0;
+    std::optional<EventId> parentEventId;
+    EventId rootEventId = 0;
+    std::optional<Players> actor;
+    std::optional<AbilityRef> originAbility;
+    std::uint64_t stateVersion = 0;
+    EventOrigin origin = EventOrigin::Server;
+    ExecutionMode mode = ExecutionMode::Commit;
 };
 
 class Event {
 public:
-    EventKind kind = EventKind::Signal;
-    std::uint64_t eventId = 0;  // 新返回事件由 Condition 分配
-    std::optional<std::uint64_t> parentEventId;
-    std::uint64_t rootEventId = 0;
+    virtual ~Event() = default;
+    Event(const Event&) = delete;
+    Event& operator=(const Event&) = delete;
 
-    // Signal 使用的事件描述；Effect 不使用 timing 进行技能派发。
-    Timing timing = Timing::GameStart;
-    std::optional<Players> actor;
-    AbilityType source = AbilityType::Passive;
-    std::optional<std::size_t> requestedCardSeq;
-    std::optional<std::size_t> requestedAbilityIndex;
-    std::optional<RewardData> reward;
-    std::optional<ShopData> shop;
+    virtual EventKind kind() const noexcept = 0;
+    virtual std::optional<Timing> timing() const noexcept {
+        return std::nullopt;
+    }
+    const char* name() const noexcept { return name_; }
 
-    // Effect 使用的效果请求。
-    std::optional<EffectData> effect;
+    EventMeta meta;  // 由可信入口和 Condition 填写，不信任客户端自报值
+
+protected:
+    explicit Event(const char* name) : name_(name) {}
+
+private:
+    const char* name_;  // 派生类传入固定字符串
 };
 
-class GameState;  // 资源、手牌等业务状态，具体结构后续定义
+using EventPtr = std::unique_ptr<Event>;
 
-struct Context {
-    const GameState& game;
-    const Event& event;
-    Players owner;
+class RequestEvent : public Event {
+public:
+    EventKind kind() const noexcept final { return EventKind::Request; }
+    RequestId requestId = 0;
+    std::uint64_t expectedVersion = 0;
 
-    // Condition 从当前待结算状态生成的只读快照。
-    std::optional<RewardData> reward;
-    std::optional<ShopData> shop;
+protected:
+    explicit RequestEvent(const char* name) : Event(name) {}
 };
 
-// 当前操作内部的派发游标；正式实现还需保存候选快照和挂起信息。
+class SignalEvent : public Event {
+public:
+    EventKind kind() const noexcept final { return EventKind::Signal; }
+    virtual std::optional<Timing> timing() const noexcept override = 0;
+    AbilityType source() const noexcept { return source_; }
+
+protected:
+    explicit SignalEvent(const char* name,
+                         AbilityType source = AbilityType::Passive)
+        : Event(name), source_(source) {}
+
+private:
+    AbilityType source_;
+};
+
+// 只复用固定时机的实现；每个具体通知仍是独立的具名派生类。
+template<Timing When>
+class TimedSignalEvent : public SignalEvent {
+public:
+    std::optional<Timing> timing() const noexcept final { return When; }
+
+protected:
+    explicit TimedSignalEvent(const char* name,
+                              AbilityType source = AbilityType::Passive)
+        : SignalEvent(name, source) {}
+};
+
+class EffectEvent : public Event {
+public:
+    EventKind kind() const noexcept final { return EventKind::Effect; }
+
+protected:
+    explicit EffectEvent(const char* name) : Event(name) {}
+};
+
+class ControlEvent : public Event {
+public:
+    EventKind kind() const noexcept final { return EventKind::Control; }
+
+protected:
+    explicit ControlEvent(const char* name) : Event(name) {}
+};
+
+class GameState;  // 视为已有业务模型，不在本次重新实现
+class Condition;
+
+class Context {
+public:
+    Context(const Context&) = delete;
+    Context& operator=(const Context&) = delete;
+
+    const GameState& game() const noexcept { return game_; }
+    const Event* event() const noexcept { return event_; }
+    std::optional<Players> owner() const noexcept {
+        if (!receiver_) return std::nullopt;
+        return receiver_->card.owner;
+    }
+    const AbilityRef* receiver() const noexcept {
+        return receiver_ ? &*receiver_ : nullptr;
+    }
+    const RewardData* reward() const noexcept {
+        return reward_ ? &*reward_ : nullptr;
+    }
+    const ShopData* shop() const noexcept {
+        return shop_ ? &*shop_ : nullptr;
+    }
+
+    template<class T>
+    const T* event_as() const noexcept {
+        return dynamic_cast<const T*>(event_);
+    }
+
+private:
+    friend class Condition;
+    explicit Context(const GameState& game) : game_(game) {}
+
+    const GameState& game_;
+    const Event* event_ = nullptr;
+    std::optional<AbilityRef> receiver_;
+    std::optional<RewardData> reward_;
+    std::optional<ShopData> shop_;
+};
+
 struct ResolutionFrame {
-    Event event;
-    std::size_t nextPlayer = 0;
-    std::size_t nextCard = 0;
+    EventPtr event;
+    std::vector<AbilityRef> candidates;  // 本通知冻结后的有序候选
     std::size_t nextHandler = 0;
 };
 
 class Condition {
 public:
-    explicit Condition(GameState& game) : game_(game) {}
+    explicit Condition(GameState& game) : game_(game), context_(game) {}
 
     // 商店普通请求排队；局内合法操作直接启动结算。
-    // 后续事件在当前结算链内处理，其他普通出牌请求不缓存。
-    void on_event(Event event);
+    // 控制或授权选择单独校验；内部效果属于当前结算链。
+    void on_event(EventPtr event);
     GamePhase phase() const { return phase_; }
+    const Context& context() const noexcept { return context_; }
 
 private:
     bool can_accept(const Event& event) const;
-    void resolve(Event event);  // 使用循环推进当前结算栈
-    Context make_context(const Event& event, Players owner) const;
+    void resolve(EventPtr event);
+    void handle_request(const RequestEvent& event);
+    void handle_control(const ControlEvent& event);
+    void bind_context(const Event& event, const AbilityRef& receiver);
+    void clear_context() noexcept;
     void dispatch_next_handler();
-    void apply_effect(const Event& event);
+    bool apply_effect(const EffectEvent& event);
     void finish_event(const Event& event);
 
     GameState& game_;
+    Context context_;  // 每个房间仅此一份，Condition 直接更新
     GamePhase phase_ = GamePhase::NotStarted;
-    std::deque<Event> shopEvents_;  // 仅缓存商店的外部普通操作
-    std::vector<ResolutionFrame> resolutionStack_;  // 当前操作内部的连锁
-    bool processing_ = false;  // 调度循环是否正在运行
+    std::deque<EventPtr> shopEvents_;  // 只保存商店普通 Request
+    std::vector<ResolutionFrame> resolutionStack_;
+    bool processing_ = false;
 };
 ```
 
-`Condition::on_event` 按 §2.4 的接收策略处理输入；`resolve` 用循环推进当前结算栈；`make_context` 从当前状态生成临时只读快照；`dispatch_next_handler` 按功能卡中的处理器顺序调度；`apply_effect` 执行合法效果；`finish_event` 完成相应结算帧，根结算完成后才按规则推进流程。
+`Condition::on_event(EventPtr)` 接管事件所有权。`resolve` 推进当前结算栈；`handle_request` 校验操作；`handle_control` 处理连接、计时器和反馈；`apply_effect` 执行效果；`finish_event` 完成当前帧并按规则推进流程。具体业务对象视为已有，只约定接入接口，不在本次实现它们。
 
-`processing_` 仅表示调度循环正在运行，等待玩家输入的状态由挂起记录维护；它不能单独代替商店窗口、当前行动玩家或待处理交互检查。以上为接口骨架，商店队列、结算帧推进、候选快照、业务操作、请求校验与循环检测尚未实现。
+`bind_context` 由 Condition 直接更新唯一 Context 的私有字段，填入当前帧的 Event 指针、接收技能与最新待结算快照；`clear_context` 在处理器返回后清空事件、接收者和可选参数。Context 禁止复制，其他模块通过只读访问器读取，不能把调用现场保存为以后使用的状态。
 
-`Event` 返回值按值保存，`Context` 仅在当前处理期间有效；处理器不能保存其引用供之后使用。新事件不能持有指向该临时上下文的指针或引用。
+Event 由队列或结算帧中的 `unique_ptr` 拥有，即使容器移动，其派生对象地址也保持稳定。释放或弹出事件帧前必须先清理上下文绑定。所有返回事件按值保存 ID、目标和参数，不能包含指向当前 Context 的指针或引用。
+
+`Event` 是抽象基类，不能使用 `EventPtr` 之外的旧式 `optional<Event>` 或 `deque<Event>` 按值承载派生对象；返回空指针表示没有输出。Event 的虚析构保证基类指针正确销毁派生对象。`processing_` 只表示调度循环正在运行，不能代替操作窗口和挂起交互检查。
 
 ### 2.6 示例链
 
@@ -285,14 +481,1201 @@ private:
 
 ```text
 Condition 收到 PlayRewardBefore 通知
-  → 生成 Context，包含当前本手分数
-  → DoubleScoreHandler 返回 MultiplyPendingScore 效果事件，value = 2
+  → 更新共享 Context，包含当前本手分数
+  → DoubleScoreHandler 返回 MultiplyPendingScoreEvent，倍率为 2/1
   → Condition 校验目标与结算阶段，将待结算分数乘 2
-  → 生成下一个处理器的 Context，继续该手结算
+  → 刷新同一个 Context 给下一个处理器，继续该手结算
   → 所有处理完成后，按最终金额发放本手奖励
 ```
 
 处理器示例代码见 [技能说明](#37-事件处理示例)。正式卡牌及数值尚未确定。
+
+### 2.7 全部事件清单与派生类
+
+本清单以当前已经确定的游戏规则和通用技能能力为边界，共 **132 个具体事件**。新增机制继续追加清单和派生类，不把尚未发生的成功行为当作客户端请求。玩家、牌局、牌型判定、商店、随机、选择交互等模块均视为已有；这里设计它们之间的事件接口。
+
+| 类别 | 数量 | 主要来源 | 是否直接触发功能卡 |
+|---|---:|---|---|
+| Request | 21 | 玩家操作和只读查询 | 先校验，再产生对应 Signal |
+| Signal | 63 | Condition 确认的业务事实或允许的主动调用 | 按 Timing 与主动／被动类型匹配 |
+| Effect | 38 | 已校验业务流程或 Handle_Event 返回值 | 先执行，成功后产生对应 Signal |
+| Control | 10 | 连接、计时器和服务端反馈 | 不直接作为成功行为触发卡牌 |
+
+事件的公共字段在 `EventMeta` 中，客户端请求额外带 `requestId` 和预期版本；下表只列专属参数。ID、引用及枚举为接口约定，已有同名定义时直接复用，不重复构建玩家等业务类。默认构造仅便于创建，必需 ID 和参数仍由 Condition 校验，零值不代表合法对象。
+
+每个表项都对应下面的独立派生类。共同的四类父类和 `TimedSignalEvent` 只消除重复代码；事件参数仍在各个具体类中声明。没有使用统一的 `void*` 或任意类型参数包。
+
+#### 2.7.1 操作请求（21 个）
+
+| 事件派生类 | 含义 | 专属参数 | 时机或执行约束 |
+|---|---|---|---|
+| `BuyShopItemRequest` | 购买普通货架商品 | `shopId: ShopId`；`slotId: SlotId`；`productId: ProductId` | 商店队列；价格由服务端计算 |
+| `BuyBoosterPackRequest` | 购买并立即打开卡包 | `shopId: ShopId`；`packId: PackId` | 商店队列；验证空槽与包限购，扣款后立即开包 |
+| `SellFunctionCardRequest` | 出售功能卡 | `shopId: ShopId`；`card: CardRef` | 商店队列；出售成本和成长清理按既有规则 |
+| `RefreshShopRequest` | 刷新普通货架 | `shopId: ShopId` | 商店队列；出队时检查刷新上限及当前报价 |
+| `LockShopSlotRequest` | 锁定货位 | `shopId: ShopId`；`slotId: SlotId` | 按当前状态和来源校验 |
+| `UnlockShopSlotRequest` | 解锁货位 | `shopId: ShopId`；`slotId: SlotId` | 按当前状态和来源校验 |
+| `ChooseBoosterCardRequest` | 选择卡包候选 | `choiceId: ChoiceId`；`optionId: ChoiceOptionId` | 授权选择回复，不作为下一次普通购物排队 |
+| `SkipBoosterPackRequest` | 放弃已打开卡包 | `choiceId: ChoiceId` | 授权选择回复；不退已支付包价 |
+| `UpgradeHandPatternRequest` | 付费加强牌型 | `shopId: ShopId`；`pattern: HandPattern` | 按当前状态和来源校验 |
+| `BuyFacilityRequest` | 购买设施 | `shopId: ShopId`；`facilityId: DefinitionId` | 按当前状态和来源校验 |
+| `FinishShoppingRequest` | 完成本次购物 | `shopId: ShopId` | 按当前状态和来源校验 |
+| `PlayCardsRequest` | 确认出牌 | `turnId: TurnId`；`cards: std::vector<CardId>`；`wildcards: std::vector<WildcardAssignment>` | 局内直接；合法提交后才产生出牌成功通知 |
+| `PassRequest` | 主动不出牌 | `turnId: TurnId` | 局内直接；先手不能因此跳过领出 |
+| `ActivateAbilityRequest` | 发动主动技能 | `ability: AbilityRef`；`selection: TargetSpec` | 校验技能归属、窗口、费用与次数；商店和局内依窗口处理 |
+| `SubmitChoiceRequest` | 提交一般目标或方案 | `choiceId: ChoiceId`；`options: std::vector<ChoiceOptionId>` | 按交互授权接受，允许非当前行动玩家回复 |
+| `ResolveWildcardRequest` | 确认赖子指定 | `choiceId: ChoiceId`；`wildcards: std::vector<WildcardAssignment>` | 按赖子交互授权接受，确认后仍需校验跟牌 |
+| `ContinueGameRequest` | 请求加赛或无尽模式 | `mode: ContinueMode` | 游戏结束后的模式请求；多人一致性规则待既有房间模块确定 |
+| `StartNewGameRequest` | 请求开始新一场 | 无额外参数 | 按房间流程验证，新游戏重新初始化资源 |
+| `StateSyncRequest` | 请求状态同步 | `lastSeenVersion: std::uint64_t` | 只读同步通道，不受出牌请求忙碌门禁限制 |
+| `PreviewPlayRequest` | 查询选牌的合法方案 | `turnId: TurnId`；`cards: std::vector<CardId>` | 只读预览；不提交出牌、不扣次数、不推进实际随机序列 |
+| `QuoteShopOperationRequest` | 查询商店操作报价 | `shopId: ShopId`；`operation: ShopOperation`；`productId: std::optional<ProductId>`；`card: std::optional<CardRef>`；`pattern: std::optional<HandPattern>`；`facilityId: std::optional<DefinitionId>` | 只读预览；不因重复查询消耗免费额度 |
+
+```cpp
+class BuyShopItemRequest final : public RequestEvent {
+public:
+    BuyShopItemRequest() : RequestEvent("BuyShopItemRequest") {}
+    ShopId shopId{};  // 商店会话
+    SlotId slotId{};  // 货位
+    ProductId productId{};  // 商品
+};
+
+class BuyBoosterPackRequest final : public RequestEvent {
+public:
+    BuyBoosterPackRequest() : RequestEvent("BuyBoosterPackRequest") {}
+    ShopId shopId{};  // 商店会话
+    PackId packId{};  // 展示中的卡包实例
+};
+
+class SellFunctionCardRequest final : public RequestEvent {
+public:
+    SellFunctionCardRequest() : RequestEvent("SellFunctionCardRequest") {}
+    ShopId shopId{};  // 商店会话
+    CardRef card{};  // 功能卡实例
+};
+
+class RefreshShopRequest final : public RequestEvent {
+public:
+    RefreshShopRequest() : RequestEvent("RefreshShopRequest") {}
+    ShopId shopId{};  // 商店会话
+};
+
+class LockShopSlotRequest final : public RequestEvent {
+public:
+    LockShopSlotRequest() : RequestEvent("LockShopSlotRequest") {}
+    ShopId shopId{};  // 商店会话
+    SlotId slotId{};  // 货位
+};
+
+class UnlockShopSlotRequest final : public RequestEvent {
+public:
+    UnlockShopSlotRequest() : RequestEvent("UnlockShopSlotRequest") {}
+    ShopId shopId{};  // 商店会话
+    SlotId slotId{};  // 货位
+};
+
+class ChooseBoosterCardRequest final : public RequestEvent {
+public:
+    ChooseBoosterCardRequest() : RequestEvent("ChooseBoosterCardRequest") {}
+    ChoiceId choiceId{};  // 待处理交互
+    ChoiceOptionId optionId{};  // 选中的候选
+};
+
+class SkipBoosterPackRequest final : public RequestEvent {
+public:
+    SkipBoosterPackRequest() : RequestEvent("SkipBoosterPackRequest") {}
+    ChoiceId choiceId{};  // 待处理交互
+};
+
+class UpgradeHandPatternRequest final : public RequestEvent {
+public:
+    UpgradeHandPatternRequest() : RequestEvent("UpgradeHandPatternRequest") {}
+    ShopId shopId{};  // 商店会话
+    HandPattern pattern{};  // 牌型
+};
+
+class BuyFacilityRequest final : public RequestEvent {
+public:
+    BuyFacilityRequest() : RequestEvent("BuyFacilityRequest") {}
+    ShopId shopId{};  // 商店会话
+    DefinitionId facilityId{};  // 设施定义
+};
+
+class FinishShoppingRequest final : public RequestEvent {
+public:
+    FinishShoppingRequest() : RequestEvent("FinishShoppingRequest") {}
+    ShopId shopId{};  // 商店会话
+};
+
+class PlayCardsRequest final : public RequestEvent {
+public:
+    PlayCardsRequest() : RequestEvent("PlayCardsRequest") {}
+    TurnId turnId{};  // 所属回合
+    std::vector<CardId> cards{};  // 实际扑克牌实例
+    std::vector<WildcardAssignment> wildcards{};  // 赖子指定方案
+};
+
+class PassRequest final : public RequestEvent {
+public:
+    PassRequest() : RequestEvent("PassRequest") {}
+    TurnId turnId{};  // 所属回合
+};
+
+class ActivateAbilityRequest final : public RequestEvent {
+public:
+    ActivateAbilityRequest() : RequestEvent("ActivateAbilityRequest") {}
+    AbilityRef ability{};  // 目标技能
+    TargetSpec selection{};  // 目标与方案
+};
+
+class SubmitChoiceRequest final : public RequestEvent {
+public:
+    SubmitChoiceRequest() : RequestEvent("SubmitChoiceRequest") {}
+    ChoiceId choiceId{};  // 待处理交互
+    std::vector<ChoiceOptionId> options{};  // 选中的合法选项
+};
+
+class ResolveWildcardRequest final : public RequestEvent {
+public:
+    ResolveWildcardRequest() : RequestEvent("ResolveWildcardRequest") {}
+    ChoiceId choiceId{};  // 待处理交互
+    std::vector<WildcardAssignment> wildcards{};  // 指定方案
+};
+
+class ContinueGameRequest final : public RequestEvent {
+public:
+    ContinueGameRequest() : RequestEvent("ContinueGameRequest") {}
+    ContinueMode mode{};  // 续玩模式
+};
+
+class StartNewGameRequest final : public RequestEvent {
+public:
+    StartNewGameRequest() : RequestEvent("StartNewGameRequest") {}
+};
+
+class StateSyncRequest final : public RequestEvent {
+public:
+    StateSyncRequest() : RequestEvent("StateSyncRequest") {}
+    std::uint64_t lastSeenVersion{};  // 客户端已知版本
+};
+
+class PreviewPlayRequest final : public RequestEvent {
+public:
+    PreviewPlayRequest() : RequestEvent("PreviewPlayRequest") {}
+    TurnId turnId{};  // 所属回合
+    std::vector<CardId> cards{};  // 实际扑克牌实例
+};
+
+class QuoteShopOperationRequest final : public RequestEvent {
+public:
+    QuoteShopOperationRequest() : RequestEvent("QuoteShopOperationRequest") {}
+    ShopId shopId{};  // 商店会话
+    ShopOperation operation{};  // 报价业务
+    std::optional<ProductId> productId{};  // 购买商品
+    std::optional<CardRef> card{};  // 出售实例
+    std::optional<HandPattern> pattern{};  // 加强牌型
+    std::optional<DefinitionId> facilityId{};  // 设施
+};
+```
+
+#### 2.7.2 业务通知（63 个）
+
+| 事件派生类 | 含义 | 专属参数 | 时机或执行约束 |
+|---|---|---|---|
+| `GameStartedEvent` | 整场开始 | `participants: std::vector<Players>`；`roundCount: int` | `GameStart` |
+| `ShopEnteredEvent` | 进入局前商店 | `player: Players`；`shopId: ShopId` | `ShopEnter` |
+| `ShopAbilityActivationEvent` | 商店窗口内的主动技能调用 | `ability: AbilityRef`；`selection: TargetSpec` | `ShopActionWindow`；只对应一次已验证主动调用，不能作为每帧被动通知 |
+| `BeforeShopRefreshEvent` | 刷新报价前 | `player: Players`；`shopId: ShopId`；`settlementId: SettlementId`；`initialQuote: ShopData` | `ShopRefreshQuote` |
+| `ShopRefreshedEvent` | 刷新成功后 | `player: Players`；`shopId: ShopId`；`slots: std::vector<SlotId>`；`paid: CoinValue` | `ShopRefreshAfter` |
+| `BeforeShopPurchaseEvent` | 购买报价前 | `player: Players`；`shopId: ShopId`；`settlementId: SettlementId`；`productId: ProductId`；`initialQuote: ShopData` | `ShopBuyQuote` |
+| `ShopPurchasedEvent` | 购买交付成功后 | `player: Players`；`shopId: ShopId`；`productId: ProductId`；`paid: CoinValue` | `ShopBuyAfter` |
+| `BeforeShopSaleEvent` | 出售报价前 | `player: Players`；`shopId: ShopId`；`card: CardRef`；`settlementId: SettlementId`；`initialQuote: ShopData` | `ShopSellQuote` |
+| `ShopSoldEvent` | 出售成功后 | `player: Players`；`shopId: ShopId`；`card: CardRef`；`received: CoinValue` | `ShopSellAfter` |
+| `ShopLeftEvent` | 离店 | `player: Players`；`shopId: ShopId`；`timedOut: bool` | `ShopLeave` |
+| `RoundStartedEvent` | 本局开始 | `roundId: RoundId`；`firstPlayer: Players` | `RoundStart` |
+| `BeforeInitialDealEvent` | 初始发牌前 | `roundId: RoundId`；`cardsPerPlayer: int` | `InitialDealBefore` |
+| `InitialCardsDealtEvent` | 全体初始发牌完成 | `roundId: RoundId` | `InitialDealAfter` |
+| `TrickStartedEvent` | 本巡开始 | `roundId: RoundId`；`trickId: TrickId`；`leader: Players` | `TrickStart` |
+| `TurnStartedEvent` | 当前回合开始 | `turnId: TurnId`；`player: Players` | `TurnStart` |
+| `TurnAbilityActivationEvent` | 出牌窗口内的主动技能调用 | `turnId: TurnId`；`ability: AbilityRef`；`selection: TargetSpec` | `PlayActionWindow`；只对应一次已验证主动调用，不能作为每帧被动通知 |
+| `PlayValidationEvent` | 验证选牌及跟牌 | `turnId: TurnId`；`player: Players`；`cards: std::vector<CardId>`；`wildcards: std::vector<WildcardAssignment>` | `PlayValidate` |
+| `CardsPlayedEvent` | 成功提交一手牌 | `turnId: TurnId`；`player: Players`；`handId: PlayedHandId`；`cards: std::vector<CardId>`；`pattern: HandPattern` | `PlayCommitted` |
+| `BeforePlayRewardEvent` | 计算本手出牌奖励前 | `turnId: TurnId`；`player: Players`；`handId: PlayedHandId`；`settlementId: SettlementId`；`initialReward: RewardData` | `PlayRewardBefore` |
+| `PlayRewardGrantedEvent` | 本手奖励到账后 | `turnId: TurnId`；`player: Players`；`handId: PlayedHandId`；`reward: RewardData` | `PlayRewardAfter` |
+| `PlayerPassedEvent` | 确认不出牌 | `turnId: TurnId`；`player: Players`；`reason: PassReason` | `PassCommitted` |
+| `TurnEndedEvent` | 当前回合结算结束 | `turnId: TurnId`；`player: Players` | `TurnEnd` |
+| `TrickEndedEvent` | 获得牌权并结束本巡 | `trickId: TrickId`；`leader: Players` | `TrickEnd` |
+| `BeforeCardsDrawEvent` | 非初始摸牌前 | `player: Players`；`settlementId: SettlementId`；`requestedCount: int`；`reason: DrawReason` | `DrawBefore` |
+| `CardsDrawnEvent` | 实际摸牌完成 | `player: Players`；`cards: std::vector<CardId>`；`reason: DrawReason` | `DrawAfter` |
+| `TrickDrawingCompletedEvent` | 巡末摸牌步骤完成 | `trickId: TrickId`；`actualTotal: int` | `TrickDrawsAfter` |
+| `RoundEndedEvent` | 本局结束且最后回合结算完成 | `roundId: RoundId`；`resultId: RoundResultId` | `RoundEnd` |
+| `BeforeRoundRewardEvent` | 计算玩家局末奖励前 | `roundId: RoundId`；`player: Players`；`settlementId: SettlementId`；`initialReward: RewardData` | `RoundRewardBefore` |
+| `RoundRewardsGrantedEvent` | 全体局末奖励与扣款完成 | `roundId: RoundId`；`resultId: RoundResultId` | `RoundRewardAfter` |
+| `GameEndedEvent` | 整场结束与冠军确认 | `winners: std::vector<Players>`；`finalVersion: std::uint64_t` | `GameEnd` |
+| `PlayingCardsChangedEvent` | 技能实际改变牌面或手牌后 | `player: Players`；`cards: std::vector<CardId>`；`reason: std::string` | `CardChanged` |
+| `AbilityResolvedEvent` | 技能效果成功结算后 | `ability: AbilityRef`；`triggerEventId: EventId` | `AbilityResolved` |
+| `FunctionCardEquippedEvent` | 功能卡进入槽位 | `card: CardRef`；`slot: std::size_t` | `FunctionCardEquipped` |
+| `FunctionCardRemovedEvent` | 功能卡离开槽位 | `card: CardRef`；`reason: RemovalReason` | `FunctionCardRemoved` |
+| `ShopSlotLockedEvent` | 货位锁定成功 | `player: Players`；`shopId: ShopId`；`slotId: SlotId` | `ShopSlotLocked` |
+| `ShopSlotUnlockedEvent` | 货位解锁成功 | `player: Players`；`shopId: ShopId`；`slotId: SlotId` | `ShopSlotUnlocked` |
+| `BoosterPackOpenedEvent` | 卡包已付费打开 | `player: Players`；`packId: PackId`；`choiceId: ChoiceId` | `BoosterPackOpened` |
+| `BoosterPackChoiceCompletedEvent` | 卡包候选选取完成 | `player: Players`；`packId: PackId`；`options: std::vector<ChoiceOptionId>` | `BoosterPackChoiceCompleted` |
+| `BoosterPackSkippedEvent` | 卡包已放弃 | `player: Players`；`packId: PackId` | `BoosterPackSkipped` |
+| `ExpansionCardUsedEvent` | 拓展牌获得即使用完成 | `player: Players`；`expansionId: DefinitionId`；`selection: TargetSpec` | `ExpansionCardUsed` |
+| `HandPatternUpgradedEvent` | 牌型加强完成 | `player: Players`；`pattern: HandPattern`；`beforeLevel: int`；`afterLevel: int` | `HandPatternUpgraded` |
+| `FacilityPurchasedEvent` | 设施购买生效 | `player: Players`；`facilityId: DefinitionId` | `FacilityPurchased` |
+| `CoinsChangedEvent` | 金币余额实际变化 | `player: Players`；`before: CoinValue`；`after: CoinValue`；`reason: std::string` | `CoinsChanged` |
+| `ScoreChangedEvent` | 累计分数实际变化 | `player: Players`；`before: ScoreValue`；`after: ScoreValue` | `ScoreChanged` |
+| `PlayerStatusChangedEvent` | 玩家状态实际变化 | `player: Players`；`statusId: StatusId`；`reason: std::string` | `PlayerStatusChanged` |
+| `AbilityAddedEvent` | 技能添加完成 | `ability: AbilityRef` | `AbilityAdded` |
+| `AbilityRemovedEvent` | 技能逻辑移除完成 | `ability: AbilityRef` | `AbilityRemoved` |
+| `AbilityAbolishedEvent` | 技能被永久废除 | `ability: AbilityRef` | `AbilityAbolished` |
+| `AbilityUsabilityChangedEvent` | 技能临时可用开关变化 | `ability: AbilityRef`；`usable: bool` | `AbilityUsabilityChanged` |
+| `ChoiceOpenedEvent` | 交互选择窗口建立 | `player: Players`；`choiceId: ChoiceId`；`choiceKind: ChoiceKind` | `ChoiceOpened` |
+| `ChoiceResolvedEvent` | 交互选择处理完成 | `player: Players`；`choiceId: ChoiceId`；`options: std::vector<ChoiceOptionId>`；`reason: ChoiceReason` | `ChoiceResolved` |
+| `ChoiceExpiredEvent` | 交互期限已到并完成默认处理 | `player: Players`；`choiceId: ChoiceId` | `ChoiceExpired` |
+| `RoundWinnerLockedEvent` | 出空时锁定赢家与手牌快照 | `roundId: RoundId`；`winner: Players`；`resultId: RoundResultId` | `RoundWinnerLocked` |
+| `DrawPileExhaustedEvent` | 牌堆由非空变为空 | `roundId: RoundId` | `DrawPileExhausted` |
+| `AllShopsClosedEvent` | 全体商店会话关闭且交易结清 | `roundId: RoundId` | `AllShopsClosed` |
+| `FunctionCardUsabilityChangedEvent` | 整张功能卡临时开关变化 | `card: CardRef`；`usable: bool` | `FunctionCardUsabilityChanged` |
+| `FunctionCardAbolishedEvent` | 整张功能卡被废除 | `card: CardRef` | `FunctionCardAbolished` |
+| `AbilityStateChangedEvent` | 技能成长或蓄力状态变化 | `ability: AbilityRef`；`counterId: CounterId`；`before: int`；`after: int` | `AbilityStateChanged` |
+| `DelayedEffectScheduledEvent` | 延迟效果标记建立 | `player: Players`；`delayedEffectId: DelayedEffectId` | `DelayedEffectScheduled` |
+| `DelayedEffectTriggeredEvent` | 延迟标记实际执行完成 | `player: Players`；`delayedEffectId: DelayedEffectId` | `DelayedEffectTriggered` |
+| `DelayedEffectExpiredEvent` | 延迟标记结束或失效 | `player: Players`；`delayedEffectId: DelayedEffectId` | `DelayedEffectExpired` |
+| `CoatingAppliedEvent` | 镀层施加完成 | `card: CardRef`；`coating: CoatingType` | `CoatingApplied` |
+| `CardVisibilityChangedEvent` | 查看权限或公开信息变化 | `viewer: Players`；`cards: std::vector<CardId>` | `CardVisibilityChanged` |
+
+```cpp
+class GameStartedEvent final : public TimedSignalEvent<Timing::GameStart> {
+public:
+    GameStartedEvent() : TimedSignalEvent<Timing::GameStart>("GameStartedEvent") {}
+    std::vector<Players> participants{};  // 实际参局玩家
+    int roundCount{};  // 标准局数
+};
+
+class ShopEnteredEvent final : public TimedSignalEvent<Timing::ShopEnter> {
+public:
+    ShopEnteredEvent() : TimedSignalEvent<Timing::ShopEnter>("ShopEnteredEvent") {}
+    Players player{};  // 相关玩家
+    ShopId shopId{};  // 商店会话
+};
+
+class ShopAbilityActivationEvent final : public TimedSignalEvent<Timing::ShopActionWindow> {
+public:
+    ShopAbilityActivationEvent() : TimedSignalEvent<Timing::ShopActionWindow>("ShopAbilityActivationEvent", AbilityType::Active) {}
+    AbilityRef ability{};  // 目标技能
+    TargetSpec selection{};  // 目标与方案
+};
+
+class BeforeShopRefreshEvent final : public TimedSignalEvent<Timing::ShopRefreshQuote> {
+public:
+    BeforeShopRefreshEvent() : TimedSignalEvent<Timing::ShopRefreshQuote>("BeforeShopRefreshEvent") {}
+    Players player{};  // 相关玩家
+    ShopId shopId{};  // 商店会话
+    SettlementId settlementId{};  // 待结算事务
+    ShopData initialQuote{};  // 初始报价
+};
+
+class ShopRefreshedEvent final : public TimedSignalEvent<Timing::ShopRefreshAfter> {
+public:
+    ShopRefreshedEvent() : TimedSignalEvent<Timing::ShopRefreshAfter>("ShopRefreshedEvent") {}
+    Players player{};  // 相关玩家
+    ShopId shopId{};  // 商店会话
+    std::vector<SlotId> slots{};  // 实际替换的货位
+    CoinValue paid{};  // 实际费用
+};
+
+class BeforeShopPurchaseEvent final : public TimedSignalEvent<Timing::ShopBuyQuote> {
+public:
+    BeforeShopPurchaseEvent() : TimedSignalEvent<Timing::ShopBuyQuote>("BeforeShopPurchaseEvent") {}
+    Players player{};  // 相关玩家
+    ShopId shopId{};  // 商店会话
+    SettlementId settlementId{};  // 待结算事务
+    ProductId productId{};  // 商品
+    ShopData initialQuote{};  // 初始报价
+};
+
+class ShopPurchasedEvent final : public TimedSignalEvent<Timing::ShopBuyAfter> {
+public:
+    ShopPurchasedEvent() : TimedSignalEvent<Timing::ShopBuyAfter>("ShopPurchasedEvent") {}
+    Players player{};  // 相关玩家
+    ShopId shopId{};  // 商店会话
+    ProductId productId{};  // 商品
+    CoinValue paid{};  // 实际费用
+};
+
+class BeforeShopSaleEvent final : public TimedSignalEvent<Timing::ShopSellQuote> {
+public:
+    BeforeShopSaleEvent() : TimedSignalEvent<Timing::ShopSellQuote>("BeforeShopSaleEvent") {}
+    Players player{};  // 相关玩家
+    ShopId shopId{};  // 商店会话
+    CardRef card{};  // 功能卡实例
+    SettlementId settlementId{};  // 待结算事务
+    ShopData initialQuote{};  // 初始报价
+};
+
+class ShopSoldEvent final : public TimedSignalEvent<Timing::ShopSellAfter> {
+public:
+    ShopSoldEvent() : TimedSignalEvent<Timing::ShopSellAfter>("ShopSoldEvent") {}
+    Players player{};  // 相关玩家
+    ShopId shopId{};  // 商店会话
+    CardRef card{};  // 功能卡实例
+    CoinValue received{};  // 实际收入
+};
+
+class ShopLeftEvent final : public TimedSignalEvent<Timing::ShopLeave> {
+public:
+    ShopLeftEvent() : TimedSignalEvent<Timing::ShopLeave>("ShopLeftEvent") {}
+    Players player{};  // 相关玩家
+    ShopId shopId{};  // 商店会话
+    bool timedOut{};  // 是否商店超时
+};
+
+class RoundStartedEvent final : public TimedSignalEvent<Timing::RoundStart> {
+public:
+    RoundStartedEvent() : TimedSignalEvent<Timing::RoundStart>("RoundStartedEvent") {}
+    RoundId roundId{};  // 所属局
+    Players firstPlayer{};  // 本局先手
+};
+
+class BeforeInitialDealEvent final : public TimedSignalEvent<Timing::InitialDealBefore> {
+public:
+    BeforeInitialDealEvent() : TimedSignalEvent<Timing::InitialDealBefore>("BeforeInitialDealEvent") {}
+    RoundId roundId{};  // 所属局
+    int cardsPerPlayer = 7;  // 既有规则起手数量
+};
+
+class InitialCardsDealtEvent final : public TimedSignalEvent<Timing::InitialDealAfter> {
+public:
+    InitialCardsDealtEvent() : TimedSignalEvent<Timing::InitialDealAfter>("InitialCardsDealtEvent") {}
+    RoundId roundId{};  // 所属局
+};
+
+class TrickStartedEvent final : public TimedSignalEvent<Timing::TrickStart> {
+public:
+    TrickStartedEvent() : TimedSignalEvent<Timing::TrickStart>("TrickStartedEvent") {}
+    RoundId roundId{};  // 所属局
+    TrickId trickId{};  // 所属巡
+    Players leader{};  // 领出玩家
+};
+
+class TurnStartedEvent final : public TimedSignalEvent<Timing::TurnStart> {
+public:
+    TurnStartedEvent() : TimedSignalEvent<Timing::TurnStart>("TurnStartedEvent") {}
+    TurnId turnId{};  // 所属回合
+    Players player{};  // 相关玩家
+};
+
+class TurnAbilityActivationEvent final : public TimedSignalEvent<Timing::PlayActionWindow> {
+public:
+    TurnAbilityActivationEvent() : TimedSignalEvent<Timing::PlayActionWindow>("TurnAbilityActivationEvent", AbilityType::Active) {}
+    TurnId turnId{};  // 所属回合
+    AbilityRef ability{};  // 目标技能
+    TargetSpec selection{};  // 目标与方案
+};
+
+class PlayValidationEvent final : public TimedSignalEvent<Timing::PlayValidate> {
+public:
+    PlayValidationEvent() : TimedSignalEvent<Timing::PlayValidate>("PlayValidationEvent") {}
+    TurnId turnId{};  // 所属回合
+    Players player{};  // 相关玩家
+    std::vector<CardId> cards{};  // 实际扑克牌实例
+    std::vector<WildcardAssignment> wildcards{};  // 指定方案
+};
+
+class CardsPlayedEvent final : public TimedSignalEvent<Timing::PlayCommitted> {
+public:
+    CardsPlayedEvent() : TimedSignalEvent<Timing::PlayCommitted>("CardsPlayedEvent") {}
+    TurnId turnId{};  // 所属回合
+    Players player{};  // 相关玩家
+    PlayedHandId handId{};  // 已提交的一手牌
+    std::vector<CardId> cards{};  // 实际扑克牌实例
+    HandPattern pattern{};  // 最终牌型
+};
+
+class BeforePlayRewardEvent final : public TimedSignalEvent<Timing::PlayRewardBefore> {
+public:
+    BeforePlayRewardEvent() : TimedSignalEvent<Timing::PlayRewardBefore>("BeforePlayRewardEvent") {}
+    TurnId turnId{};  // 所属回合
+    Players player{};  // 相关玩家
+    PlayedHandId handId{};  // 对应出牌
+    SettlementId settlementId{};  // 待结算事务
+    RewardData initialReward{};  // 原始奖励
+};
+
+class PlayRewardGrantedEvent final : public TimedSignalEvent<Timing::PlayRewardAfter> {
+public:
+    PlayRewardGrantedEvent() : TimedSignalEvent<Timing::PlayRewardAfter>("PlayRewardGrantedEvent") {}
+    TurnId turnId{};  // 所属回合
+    Players player{};  // 相关玩家
+    PlayedHandId handId{};  // 对应出牌
+    RewardData reward{};  // 实际到账
+};
+
+class PlayerPassedEvent final : public TimedSignalEvent<Timing::PassCommitted> {
+public:
+    PlayerPassedEvent() : TimedSignalEvent<Timing::PassCommitted>("PlayerPassedEvent") {}
+    TurnId turnId{};  // 所属回合
+    Players player{};  // 相关玩家
+    PassReason reason{};  // 主动、超时或掉线
+};
+
+class TurnEndedEvent final : public TimedSignalEvent<Timing::TurnEnd> {
+public:
+    TurnEndedEvent() : TimedSignalEvent<Timing::TurnEnd>("TurnEndedEvent") {}
+    TurnId turnId{};  // 所属回合
+    Players player{};  // 相关玩家
+};
+
+class TrickEndedEvent final : public TimedSignalEvent<Timing::TrickEnd> {
+public:
+    TrickEndedEvent() : TimedSignalEvent<Timing::TrickEnd>("TrickEndedEvent") {}
+    TrickId trickId{};  // 所属巡
+    Players leader{};  // 牌权获得者
+};
+
+class BeforeCardsDrawEvent final : public TimedSignalEvent<Timing::DrawBefore> {
+public:
+    BeforeCardsDrawEvent() : TimedSignalEvent<Timing::DrawBefore>("BeforeCardsDrawEvent") {}
+    Players player{};  // 相关玩家
+    SettlementId settlementId{};  // 待结算事务
+    int requestedCount{};  // 请求摸牌数
+    DrawReason reason{};  // 摸牌原因
+};
+
+class CardsDrawnEvent final : public TimedSignalEvent<Timing::DrawAfter> {
+public:
+    CardsDrawnEvent() : TimedSignalEvent<Timing::DrawAfter>("CardsDrawnEvent") {}
+    Players player{};  // 相关玩家
+    std::vector<CardId> cards{};  // 实际扑克牌实例
+    DrawReason reason{};  // 摸牌原因
+};
+
+class TrickDrawingCompletedEvent final : public TimedSignalEvent<Timing::TrickDrawsAfter> {
+public:
+    TrickDrawingCompletedEvent() : TimedSignalEvent<Timing::TrickDrawsAfter>("TrickDrawingCompletedEvent") {}
+    TrickId trickId{};  // 所属巡
+    int actualTotal{};  // 全体实际摸牌总数
+};
+
+class RoundEndedEvent final : public TimedSignalEvent<Timing::RoundEnd> {
+public:
+    RoundEndedEvent() : TimedSignalEvent<Timing::RoundEnd>("RoundEndedEvent") {}
+    RoundId roundId{};  // 所属局
+    RoundResultId resultId{};  // 已锁定结果
+};
+
+class BeforeRoundRewardEvent final : public TimedSignalEvent<Timing::RoundRewardBefore> {
+public:
+    BeforeRoundRewardEvent() : TimedSignalEvent<Timing::RoundRewardBefore>("BeforeRoundRewardEvent") {}
+    RoundId roundId{};  // 所属局
+    Players player{};  // 相关玩家
+    SettlementId settlementId{};  // 待结算事务
+    RewardData initialReward{};  // 基础待结算奖励
+};
+
+class RoundRewardsGrantedEvent final : public TimedSignalEvent<Timing::RoundRewardAfter> {
+public:
+    RoundRewardsGrantedEvent() : TimedSignalEvent<Timing::RoundRewardAfter>("RoundRewardsGrantedEvent") {}
+    RoundId roundId{};  // 所属局
+    RoundResultId resultId{};  // 实际结算记录
+};
+
+class GameEndedEvent final : public TimedSignalEvent<Timing::GameEnd> {
+public:
+    GameEndedEvent() : TimedSignalEvent<Timing::GameEnd>("GameEndedEvent") {}
+    std::vector<Players> winners{};  // 并列冠军
+    std::uint64_t finalVersion{};  // 最终状态版本
+};
+
+class PlayingCardsChangedEvent final : public TimedSignalEvent<Timing::CardChanged> {
+public:
+    PlayingCardsChangedEvent() : TimedSignalEvent<Timing::CardChanged>("PlayingCardsChangedEvent") {}
+    Players player{};  // 相关玩家
+    std::vector<CardId> cards{};  // 实际扑克牌实例
+    std::string reason{};  // 变化原因
+};
+
+class AbilityResolvedEvent final : public TimedSignalEvent<Timing::AbilityResolved> {
+public:
+    AbilityResolvedEvent() : TimedSignalEvent<Timing::AbilityResolved>("AbilityResolvedEvent") {}
+    AbilityRef ability{};  // 目标技能
+    EventId triggerEventId{};  // 触发事件
+};
+
+class FunctionCardEquippedEvent final : public TimedSignalEvent<Timing::FunctionCardEquipped> {
+public:
+    FunctionCardEquippedEvent() : TimedSignalEvent<Timing::FunctionCardEquipped>("FunctionCardEquippedEvent") {}
+    CardRef card{};  // 功能卡实例
+    std::size_t slot{};  // 实际槽位
+};
+
+class FunctionCardRemovedEvent final : public TimedSignalEvent<Timing::FunctionCardRemoved> {
+public:
+    FunctionCardRemovedEvent() : TimedSignalEvent<Timing::FunctionCardRemoved>("FunctionCardRemovedEvent") {}
+    CardRef card{};  // 功能卡实例
+    RemovalReason reason{};  // 移除原因
+};
+
+class ShopSlotLockedEvent final : public TimedSignalEvent<Timing::ShopSlotLocked> {
+public:
+    ShopSlotLockedEvent() : TimedSignalEvent<Timing::ShopSlotLocked>("ShopSlotLockedEvent") {}
+    Players player{};  // 相关玩家
+    ShopId shopId{};  // 商店会话
+    SlotId slotId{};  // 货位
+};
+
+class ShopSlotUnlockedEvent final : public TimedSignalEvent<Timing::ShopSlotUnlocked> {
+public:
+    ShopSlotUnlockedEvent() : TimedSignalEvent<Timing::ShopSlotUnlocked>("ShopSlotUnlockedEvent") {}
+    Players player{};  // 相关玩家
+    ShopId shopId{};  // 商店会话
+    SlotId slotId{};  // 货位
+};
+
+class BoosterPackOpenedEvent final : public TimedSignalEvent<Timing::BoosterPackOpened> {
+public:
+    BoosterPackOpenedEvent() : TimedSignalEvent<Timing::BoosterPackOpened>("BoosterPackOpenedEvent") {}
+    Players player{};  // 相关玩家
+    PackId packId{};  // 包实例
+    ChoiceId choiceId{};  // 待处理交互
+};
+
+class BoosterPackChoiceCompletedEvent final : public TimedSignalEvent<Timing::BoosterPackChoiceCompleted> {
+public:
+    BoosterPackChoiceCompletedEvent() : TimedSignalEvent<Timing::BoosterPackChoiceCompleted>("BoosterPackChoiceCompletedEvent") {}
+    Players player{};  // 相关玩家
+    PackId packId{};  // 包实例
+    std::vector<ChoiceOptionId> options{};  // 实际选项
+};
+
+class BoosterPackSkippedEvent final : public TimedSignalEvent<Timing::BoosterPackSkipped> {
+public:
+    BoosterPackSkippedEvent() : TimedSignalEvent<Timing::BoosterPackSkipped>("BoosterPackSkippedEvent") {}
+    Players player{};  // 相关玩家
+    PackId packId{};  // 包实例
+};
+
+class ExpansionCardUsedEvent final : public TimedSignalEvent<Timing::ExpansionCardUsed> {
+public:
+    ExpansionCardUsedEvent() : TimedSignalEvent<Timing::ExpansionCardUsed>("ExpansionCardUsedEvent") {}
+    Players player{};  // 相关玩家
+    DefinitionId expansionId{};  // 拓展牌定义
+    TargetSpec selection{};  // 目标与方案
+};
+
+class HandPatternUpgradedEvent final : public TimedSignalEvent<Timing::HandPatternUpgraded> {
+public:
+    HandPatternUpgradedEvent() : TimedSignalEvent<Timing::HandPatternUpgraded>("HandPatternUpgradedEvent") {}
+    Players player{};  // 相关玩家
+    HandPattern pattern{};  // 牌型
+    int beforeLevel{};  // 原等级
+    int afterLevel{};  // 新等级
+};
+
+class FacilityPurchasedEvent final : public TimedSignalEvent<Timing::FacilityPurchased> {
+public:
+    FacilityPurchasedEvent() : TimedSignalEvent<Timing::FacilityPurchased>("FacilityPurchasedEvent") {}
+    Players player{};  // 相关玩家
+    DefinitionId facilityId{};  // 设施定义
+};
+
+class CoinsChangedEvent final : public TimedSignalEvent<Timing::CoinsChanged> {
+public:
+    CoinsChangedEvent() : TimedSignalEvent<Timing::CoinsChanged>("CoinsChangedEvent") {}
+    Players player{};  // 相关玩家
+    CoinValue before{};  // 变化前
+    CoinValue after{};  // 变化后
+    std::string reason{};  // 收入或支出原因
+};
+
+class ScoreChangedEvent final : public TimedSignalEvent<Timing::ScoreChanged> {
+public:
+    ScoreChangedEvent() : TimedSignalEvent<Timing::ScoreChanged>("ScoreChangedEvent") {}
+    Players player{};  // 相关玩家
+    ScoreValue before{};  // 变化前
+    ScoreValue after{};  // 变化后
+};
+
+class PlayerStatusChangedEvent final : public TimedSignalEvent<Timing::PlayerStatusChanged> {
+public:
+    PlayerStatusChangedEvent() : TimedSignalEvent<Timing::PlayerStatusChanged>("PlayerStatusChangedEvent") {}
+    Players player{};  // 相关玩家
+    StatusId statusId{};  // 状态实例
+    std::string reason{};  // 增加、移除或层数变化
+};
+
+class AbilityAddedEvent final : public TimedSignalEvent<Timing::AbilityAdded> {
+public:
+    AbilityAddedEvent() : TimedSignalEvent<Timing::AbilityAdded>("AbilityAddedEvent") {}
+    AbilityRef ability{};  // 目标技能
+};
+
+class AbilityRemovedEvent final : public TimedSignalEvent<Timing::AbilityRemoved> {
+public:
+    AbilityRemovedEvent() : TimedSignalEvent<Timing::AbilityRemoved>("AbilityRemovedEvent") {}
+    AbilityRef ability{};  // 目标技能
+};
+
+class AbilityAbolishedEvent final : public TimedSignalEvent<Timing::AbilityAbolished> {
+public:
+    AbilityAbolishedEvent() : TimedSignalEvent<Timing::AbilityAbolished>("AbilityAbolishedEvent") {}
+    AbilityRef ability{};  // 目标技能
+};
+
+class AbilityUsabilityChangedEvent final : public TimedSignalEvent<Timing::AbilityUsabilityChanged> {
+public:
+    AbilityUsabilityChangedEvent() : TimedSignalEvent<Timing::AbilityUsabilityChanged>("AbilityUsabilityChangedEvent") {}
+    AbilityRef ability{};  // 目标技能
+    bool usable{};  // 当前开关
+};
+
+class ChoiceOpenedEvent final : public TimedSignalEvent<Timing::ChoiceOpened> {
+public:
+    ChoiceOpenedEvent() : TimedSignalEvent<Timing::ChoiceOpened>("ChoiceOpenedEvent") {}
+    Players player{};  // 相关玩家
+    ChoiceId choiceId{};  // 待处理交互
+    ChoiceKind choiceKind{};  // 交互类型
+};
+
+class ChoiceResolvedEvent final : public TimedSignalEvent<Timing::ChoiceResolved> {
+public:
+    ChoiceResolvedEvent() : TimedSignalEvent<Timing::ChoiceResolved>("ChoiceResolvedEvent") {}
+    Players player{};  // 相关玩家
+    ChoiceId choiceId{};  // 待处理交互
+    std::vector<ChoiceOptionId> options{};  // 实际选择
+    ChoiceReason reason{};  // 手动、超时或掉线
+};
+
+class ChoiceExpiredEvent final : public TimedSignalEvent<Timing::ChoiceExpired> {
+public:
+    ChoiceExpiredEvent() : TimedSignalEvent<Timing::ChoiceExpired>("ChoiceExpiredEvent") {}
+    Players player{};  // 相关玩家
+    ChoiceId choiceId{};  // 待处理交互
+};
+
+class RoundWinnerLockedEvent final : public TimedSignalEvent<Timing::RoundWinnerLocked> {
+public:
+    RoundWinnerLockedEvent() : TimedSignalEvent<Timing::RoundWinnerLocked>("RoundWinnerLockedEvent") {}
+    RoundId roundId{};  // 所属局
+    Players winner{};  // 赢家
+    RoundResultId resultId{};  // 冻结结果
+};
+
+class DrawPileExhaustedEvent final : public TimedSignalEvent<Timing::DrawPileExhausted> {
+public:
+    DrawPileExhaustedEvent() : TimedSignalEvent<Timing::DrawPileExhausted>("DrawPileExhaustedEvent") {}
+    RoundId roundId{};  // 所属局
+};
+
+class AllShopsClosedEvent final : public TimedSignalEvent<Timing::AllShopsClosed> {
+public:
+    AllShopsClosedEvent() : TimedSignalEvent<Timing::AllShopsClosed>("AllShopsClosedEvent") {}
+    RoundId roundId{};  // 所属局
+};
+
+class FunctionCardUsabilityChangedEvent final : public TimedSignalEvent<Timing::FunctionCardUsabilityChanged> {
+public:
+    FunctionCardUsabilityChangedEvent() : TimedSignalEvent<Timing::FunctionCardUsabilityChanged>("FunctionCardUsabilityChangedEvent") {}
+    CardRef card{};  // 功能卡实例
+    bool usable{};  // 当前开关
+};
+
+class FunctionCardAbolishedEvent final : public TimedSignalEvent<Timing::FunctionCardAbolished> {
+public:
+    FunctionCardAbolishedEvent() : TimedSignalEvent<Timing::FunctionCardAbolished>("FunctionCardAbolishedEvent") {}
+    CardRef card{};  // 功能卡实例
+};
+
+class AbilityStateChangedEvent final : public TimedSignalEvent<Timing::AbilityStateChanged> {
+public:
+    AbilityStateChangedEvent() : TimedSignalEvent<Timing::AbilityStateChanged>("AbilityStateChangedEvent") {}
+    AbilityRef ability{};  // 目标技能
+    CounterId counterId{};  // 已定义的计数状态
+    int before{};  // 变化前
+    int after{};  // 变化后
+};
+
+class DelayedEffectScheduledEvent final : public TimedSignalEvent<Timing::DelayedEffectScheduled> {
+public:
+    DelayedEffectScheduledEvent() : TimedSignalEvent<Timing::DelayedEffectScheduled>("DelayedEffectScheduledEvent") {}
+    Players player{};  // 相关玩家
+    DelayedEffectId delayedEffectId{};  // 标记实例
+};
+
+class DelayedEffectTriggeredEvent final : public TimedSignalEvent<Timing::DelayedEffectTriggered> {
+public:
+    DelayedEffectTriggeredEvent() : TimedSignalEvent<Timing::DelayedEffectTriggered>("DelayedEffectTriggeredEvent") {}
+    Players player{};  // 相关玩家
+    DelayedEffectId delayedEffectId{};  // 标记实例
+};
+
+class DelayedEffectExpiredEvent final : public TimedSignalEvent<Timing::DelayedEffectExpired> {
+public:
+    DelayedEffectExpiredEvent() : TimedSignalEvent<Timing::DelayedEffectExpired>("DelayedEffectExpiredEvent") {}
+    Players player{};  // 相关玩家
+    DelayedEffectId delayedEffectId{};  // 标记实例
+};
+
+class CoatingAppliedEvent final : public TimedSignalEvent<Timing::CoatingApplied> {
+public:
+    CoatingAppliedEvent() : TimedSignalEvent<Timing::CoatingApplied>("CoatingAppliedEvent") {}
+    CardRef card{};  // 功能卡实例
+    CoatingType coating{};  // 镀层
+};
+
+class CardVisibilityChangedEvent final : public TimedSignalEvent<Timing::CardVisibilityChanged> {
+public:
+    CardVisibilityChangedEvent() : TimedSignalEvent<Timing::CardVisibilityChanged>("CardVisibilityChangedEvent") {}
+    Players viewer{};  // 获得信息的玩家
+    std::vector<CardId> cards{};  // 实际扑克牌实例
+};
+```
+
+#### 2.7.3 效果请求（38 个）
+
+| 事件派生类 | 含义 | 专属参数 | 时机或执行约束 |
+|---|---|---|---|
+| `AddScoreEvent` | 增加实际分数 | `target: Players`；`amount: ScoreValue` | 按当前状态和来源校验 |
+| `AddCoinsEvent` | 增加实际金币 | `target: Players`；`amount: CoinValue` | 按当前状态和来源校验 |
+| `SpendCoinsEvent` | 扣除实际金币 | `target: Players`；`amount: CoinValue`；`reason: std::string` | 按当前状态和来源校验 |
+| `AddPendingScoreEvent` | 修正待结算分数 | `target: Players`；`settlementId: SettlementId`；`delta: ScoreValue` | 按当前状态和来源校验 |
+| `MultiplyPendingScoreEvent` | 缩放待结算分数 | `target: Players`；`settlementId: SettlementId`；`numerator: int`；`denominator: int`；`rounding: RoundingRule` | 按当前状态和来源校验 |
+| `AddPendingCoinsEvent` | 修正待结算金币 | `target: Players`；`settlementId: SettlementId`；`delta: CoinValue`；`component: RewardComponent`；`minimum: CoinValue` | 按当前状态和来源校验 |
+| `ReduceShopCostEvent` | 降低本次商店报价 | `target: Players`；`settlementId: SettlementId`；`amount: CoinValue`；`minimum: CoinValue` | 按当前状态和来源校验 |
+| `GrantFreeRefreshEvent` | 增加本店免费刷新额度 | `target: Players`；`shopId: ShopId`；`uses: int` | 按当前状态和来源校验 |
+| `RefreshShopEvent` | 执行一次货架刷新 | `target: Players`；`shopId: ShopId`；`mode: RefreshMode` | 仍检查本店刷新总上限，免费不推进付费价格序号 |
+| `OpenBoosterPackEvent` | 执行已获准的开包 | `target: Players`；`shopId: ShopId`；`packId: PackId`；`settlementId: SettlementId` | 与购包事务关联，不跨输入等待；完成后发布开包通知并建立选择 |
+| `LockShopSlotEvent` | 执行货位锁定 | `target: Players`；`shopId: ShopId`；`slotId: SlotId` | 按当前状态和来源校验 |
+| `UnlockShopSlotEvent` | 执行货位解锁 | `target: Players`；`shopId: ShopId`；`slotId: SlotId` | 按当前状态和来源校验 |
+| `GrantFunctionCardEvent` | 生成并装备功能卡 | `target: Players`；`definitionId: DefinitionId`；`purchaseCost: CoinValue` | 检查空槽；免费生成成本为零 |
+| `RemoveFunctionCardEvent` | 移除功能卡 | `card: CardRef`；`reason: RemovalReason` | 按当前状态和来源校验 |
+| `ReplaceFunctionCardEvent` | 替换功能卡 | `card: CardRef`；`newDefinitionId: DefinitionId`；`preservePurchaseCost: bool` | 按当前状态和来源校验 |
+| `AddAbilityEvent` | 给功能卡添加技能 | `card: CardRef`；`abilityDefinitionId: DefinitionId` | 按当前状态和来源校验 |
+| `RemoveAbilityEvent` | 逻辑删除技能 | `ability: AbilityRef` | 按当前状态和来源校验 |
+| `AbolishAbilityEvent` | 永久废除技能 | `ability: AbilityRef` | 按当前状态和来源校验 |
+| `SetAbilityUsableEvent` | 设置技能临时开关 | `ability: AbilityRef`；`usable: bool` | 按当前状态和来源校验 |
+| `SetFunctionCardUsableEvent` | 设置整牌临时开关 | `card: CardRef`；`usable: bool` | 按当前状态和来源校验 |
+| `AbolishFunctionCardEvent` | 永久废除整张牌 | `card: CardRef` | 按当前状态和来源校验 |
+| `ApplyCoatingEvent` | 给功能卡施加镀层 | `card: CardRef`；`coating: CoatingType` | 按当前状态和来源校验 |
+| `DrawCardsEvent` | 按规则执行非初始摸牌 | `target: Players`；`count: int`；`reason: DrawReason` | 锁定本局结束后不得借此进行额外摸牌；牌堆不足按规则处理 |
+| `SwapCardsWithDeckEvent` | 将指定手牌换到牌堆底并等量摸顶 | `target: Players`；`cards: std::vector<CardId>` | 保持原牌身份与公共牌组总数 |
+| `ChangeCardRankEvent` | 临时改变普通牌点数 | `cardId: CardId`；`rank: int`；`lifetime: Lifetime` | 按当前状态和来源校验 |
+| `ChangeCardSuitEvent` | 临时改变花色 | `cardId: CardId`；`suit: Suit`；`lifetime: Lifetime` | 按当前状态和来源校验 |
+| `MakeCardJokerEvent` | 将指定牌临时变为王 | `cardId: CardId`；`lifetime: Lifetime` | 按当前状态和来源校验 |
+| `RevealCardsEvent` | 向指定玩家展示合法信息 | `viewer: Players`；`target: Players`；`cards: std::vector<CardId>` | 只向有权限的客户端同步牌面 |
+| `ApplyPlayerStatusEvent` | 施加玩家状态 | `target: Players`；`statusDefinitionId: DefinitionId`；`stacks: int`；`lifetime: Lifetime` | 按当前状态和来源校验 |
+| `RemovePlayerStatusEvent` | 移除玩家状态 | `target: Players`；`statusId: StatusId` | 按当前状态和来源校验 |
+| `UpgradeHandPatternEvent` | 执行牌型加强 | `target: Players`；`pattern: HandPattern`；`levels: int` | 按当前状态和来源校验 |
+| `PurchaseFacilityEvent` | 执行设施购买与生效 | `target: Players`；`facilityId: DefinitionId` | 按当前状态和来源校验 |
+| `UseExpansionCardEvent` | 执行获得即使用的拓展牌 | `target: Players`；`expansionId: DefinitionId`；`selection: TargetSpec` | 按当前状态和来源校验 |
+| `AddDelayedEffectEvent` | 建立延迟效果标记 | `target: Players`；`effectDefinitionId: DefinitionId`；`triggerTiming: Timing`；`selection: TargetSpec`；`lifetime: Lifetime` | 按当前状态和来源校验 |
+| `OpenChoiceEvent` | 建立选择窗口并挂起相关流程 | `target: Players`；`choiceKind: ChoiceKind`；`options: std::vector<ChoiceOptionId>`；`timeoutMs: std::uint32_t`；`optional: bool` | 按当前状态和来源校验 |
+| `ResolveChoiceEvent` | 执行选择或默认方案 | `choiceId: ChoiceId`；`options: std::vector<ChoiceOptionId>`；`reason: ChoiceReason` | 按当前状态和来源校验 |
+| `ChangeAbilityCounterEvent` | 改变已定义的技能成长或蓄力计数 | `ability: AbilityRef`；`counterId: CounterId`；`operation: CounterOperation`；`value: int` | 按当前状态和来源校验 |
+| `EventBatch` | 有序原子组合多个效果 | `events: std::vector<EventPtr>` | 只允许 Effect 子事件；先校验后提交，不能跨玩家输入等待 |
+
+```cpp
+class AddScoreEvent final : public EffectEvent {
+public:
+    AddScoreEvent() : EffectEvent("AddScoreEvent") {}
+    Players target{};  // 效果目标玩家
+    ScoreValue amount{};  // 增加数量
+};
+
+class AddCoinsEvent final : public EffectEvent {
+public:
+    AddCoinsEvent() : EffectEvent("AddCoinsEvent") {}
+    Players target{};  // 效果目标玩家
+    CoinValue amount{};  // 增加数量
+};
+
+class SpendCoinsEvent final : public EffectEvent {
+public:
+    SpendCoinsEvent() : EffectEvent("SpendCoinsEvent") {}
+    Players target{};  // 效果目标玩家
+    CoinValue amount{};  // 扣款数量
+    std::string reason{};  // 扣款用途
+};
+
+class AddPendingScoreEvent final : public EffectEvent {
+public:
+    AddPendingScoreEvent() : EffectEvent("AddPendingScoreEvent") {}
+    Players target{};  // 效果目标玩家
+    SettlementId settlementId{};  // 待结算事务
+    ScoreValue delta{};  // 有符号增减值
+};
+
+class MultiplyPendingScoreEvent final : public EffectEvent {
+public:
+    MultiplyPendingScoreEvent() : EffectEvent("MultiplyPendingScoreEvent") {}
+    Players target{};  // 效果目标玩家
+    SettlementId settlementId{};  // 待结算事务
+    int numerator = 1;  // 倍率分子
+    int denominator = 1;  // 倍率分母
+    RoundingRule rounding{};  // 取整规则
+};
+
+class AddPendingCoinsEvent final : public EffectEvent {
+public:
+    AddPendingCoinsEvent() : EffectEvent("AddPendingCoinsEvent") {}
+    Players target{};  // 效果目标玩家
+    SettlementId settlementId{};  // 待结算事务
+    CoinValue delta{};  // 有符号增减值
+    RewardComponent component{};  // 基础或额外奖励
+    CoinValue minimum{};  // 该部分最低金额
+};
+
+class ReduceShopCostEvent final : public EffectEvent {
+public:
+    ReduceShopCostEvent() : EffectEvent("ReduceShopCostEvent") {}
+    Players target{};  // 效果目标玩家
+    SettlementId settlementId{};  // 待结算事务
+    CoinValue amount{};  // 减费数
+    CoinValue minimum{};  // 卡牌规定的最低价
+};
+
+class GrantFreeRefreshEvent final : public EffectEvent {
+public:
+    GrantFreeRefreshEvent() : EffectEvent("GrantFreeRefreshEvent") {}
+    Players target{};  // 效果目标玩家
+    ShopId shopId{};  // 商店会话
+    int uses{};  // 额度数量
+};
+
+class RefreshShopEvent final : public EffectEvent {
+public:
+    RefreshShopEvent() : EffectEvent("RefreshShopEvent") {}
+    Players target{};  // 效果目标玩家
+    ShopId shopId{};  // 商店会话
+    RefreshMode mode{};  // 付费或免费
+};
+
+class OpenBoosterPackEvent final : public EffectEvent {
+public:
+    OpenBoosterPackEvent() : EffectEvent("OpenBoosterPackEvent") {}
+    Players target{};  // 开包玩家
+    ShopId shopId{};  // 商店会话
+    PackId packId{};  // 卡包实例
+    SettlementId settlementId{};  // 已验证的购买或授予事务
+};
+
+class LockShopSlotEvent final : public EffectEvent {
+public:
+    LockShopSlotEvent() : EffectEvent("LockShopSlotEvent") {}
+    Players target{};  // 效果目标玩家
+    ShopId shopId{};  // 商店会话
+    SlotId slotId{};  // 货位
+};
+
+class UnlockShopSlotEvent final : public EffectEvent {
+public:
+    UnlockShopSlotEvent() : EffectEvent("UnlockShopSlotEvent") {}
+    Players target{};  // 效果目标玩家
+    ShopId shopId{};  // 商店会话
+    SlotId slotId{};  // 货位
+};
+
+class GrantFunctionCardEvent final : public EffectEvent {
+public:
+    GrantFunctionCardEvent() : EffectEvent("GrantFunctionCardEvent") {}
+    Players target{};  // 效果目标玩家
+    DefinitionId definitionId{};  // 牌种
+    CoinValue purchaseCost{};  // 实例出售成本
+};
+
+class RemoveFunctionCardEvent final : public EffectEvent {
+public:
+    RemoveFunctionCardEvent() : EffectEvent("RemoveFunctionCardEvent") {}
+    CardRef card{};  // 功能卡实例
+    RemovalReason reason{};  // 移除原因
+};
+
+class ReplaceFunctionCardEvent final : public EffectEvent {
+public:
+    ReplaceFunctionCardEvent() : EffectEvent("ReplaceFunctionCardEvent") {}
+    CardRef card{};  // 功能卡实例
+    DefinitionId newDefinitionId{};  // 新牌种
+    bool preservePurchaseCost = true;  // 是否沿用出售成本
+};
+
+class AddAbilityEvent final : public EffectEvent {
+public:
+    AddAbilityEvent() : EffectEvent("AddAbilityEvent") {}
+    CardRef card{};  // 功能卡实例
+    DefinitionId abilityDefinitionId{};  // 技能定义
+};
+
+class RemoveAbilityEvent final : public EffectEvent {
+public:
+    RemoveAbilityEvent() : EffectEvent("RemoveAbilityEvent") {}
+    AbilityRef ability{};  // 目标技能
+};
+
+class AbolishAbilityEvent final : public EffectEvent {
+public:
+    AbolishAbilityEvent() : EffectEvent("AbolishAbilityEvent") {}
+    AbilityRef ability{};  // 目标技能
+};
+
+class SetAbilityUsableEvent final : public EffectEvent {
+public:
+    SetAbilityUsableEvent() : EffectEvent("SetAbilityUsableEvent") {}
+    AbilityRef ability{};  // 目标技能
+    bool usable{};  // 新开关
+};
+
+class SetFunctionCardUsableEvent final : public EffectEvent {
+public:
+    SetFunctionCardUsableEvent() : EffectEvent("SetFunctionCardUsableEvent") {}
+    CardRef card{};  // 功能卡实例
+    bool usable{};  // 新开关
+};
+
+class AbolishFunctionCardEvent final : public EffectEvent {
+public:
+    AbolishFunctionCardEvent() : EffectEvent("AbolishFunctionCardEvent") {}
+    CardRef card{};  // 功能卡实例
+};
+
+class ApplyCoatingEvent final : public EffectEvent {
+public:
+    ApplyCoatingEvent() : EffectEvent("ApplyCoatingEvent") {}
+    CardRef card{};  // 功能卡实例
+    CoatingType coating{};  // 镀层
+};
+
+class DrawCardsEvent final : public EffectEvent {
+public:
+    DrawCardsEvent() : EffectEvent("DrawCardsEvent") {}
+    Players target{};  // 效果目标玩家
+    int count{};  // 数量
+    DrawReason reason{};  // 摸牌原因
+};
+
+class SwapCardsWithDeckEvent final : public EffectEvent {
+public:
+    SwapCardsWithDeckEvent() : EffectEvent("SwapCardsWithDeckEvent") {}
+    Players target{};  // 效果目标玩家
+    std::vector<CardId> cards{};  // 实际扑克牌实例
+};
+
+class ChangeCardRankEvent final : public EffectEvent {
+public:
+    ChangeCardRankEvent() : EffectEvent("ChangeCardRankEvent") {}
+    CardId cardId{};  // 扑克牌实例
+    int rank{};  // 目标点数
+    Lifetime lifetime{};  // 持续范围
+};
+
+class ChangeCardSuitEvent final : public EffectEvent {
+public:
+    ChangeCardSuitEvent() : EffectEvent("ChangeCardSuitEvent") {}
+    CardId cardId{};  // 扑克牌实例
+    Suit suit{};  // 目标花色
+    Lifetime lifetime{};  // 持续范围
+};
+
+class MakeCardJokerEvent final : public EffectEvent {
+public:
+    MakeCardJokerEvent() : EffectEvent("MakeCardJokerEvent") {}
+    CardId cardId{};  // 扑克牌实例
+    Lifetime lifetime{};  // 持续范围
+};
+
+class RevealCardsEvent final : public EffectEvent {
+public:
+    RevealCardsEvent() : EffectEvent("RevealCardsEvent") {}
+    Players viewer{};  // 查看者
+    Players target{};  // 被查看玩家
+    std::vector<CardId> cards{};  // 实际扑克牌实例
+};
+
+class ApplyPlayerStatusEvent final : public EffectEvent {
+public:
+    ApplyPlayerStatusEvent() : EffectEvent("ApplyPlayerStatusEvent") {}
+    Players target{};  // 效果目标玩家
+    DefinitionId statusDefinitionId{};  // 状态定义
+    int stacks = 1;  // 层数
+    Lifetime lifetime{};  // 期限
+};
+
+class RemovePlayerStatusEvent final : public EffectEvent {
+public:
+    RemovePlayerStatusEvent() : EffectEvent("RemovePlayerStatusEvent") {}
+    Players target{};  // 效果目标玩家
+    StatusId statusId{};  // 状态实例
+};
+
+class UpgradeHandPatternEvent final : public EffectEvent {
+public:
+    UpgradeHandPatternEvent() : EffectEvent("UpgradeHandPatternEvent") {}
+    Players target{};  // 效果目标玩家
+    HandPattern pattern{};  // 牌型
+    int levels = 1;  // 加强级数
+};
+
+class PurchaseFacilityEvent final : public EffectEvent {
+public:
+    PurchaseFacilityEvent() : EffectEvent("PurchaseFacilityEvent") {}
+    Players target{};  // 效果目标玩家
+    DefinitionId facilityId{};  // 设施
+};
+
+class UseExpansionCardEvent final : public EffectEvent {
+public:
+    UseExpansionCardEvent() : EffectEvent("UseExpansionCardEvent") {}
+    Players target{};  // 效果目标玩家
+    DefinitionId expansionId{};  // 拓展牌
+    TargetSpec selection{};  // 目标与方案
+};
+
+class AddDelayedEffectEvent final : public EffectEvent {
+public:
+    AddDelayedEffectEvent() : EffectEvent("AddDelayedEffectEvent") {}
+    Players target{};  // 效果目标玩家
+    DefinitionId effectDefinitionId{};  // 延迟效果定义
+    Timing triggerTiming{};  // 未来触发时机
+    TargetSpec selection{};  // 目标与方案
+    Lifetime lifetime{};  // 有效期
+};
+
+class OpenChoiceEvent final : public EffectEvent {
+public:
+    OpenChoiceEvent() : EffectEvent("OpenChoiceEvent") {}
+    Players target{};  // 效果目标玩家
+    ChoiceKind choiceKind{};  // 选择类型
+    std::vector<ChoiceOptionId> options{};  // 合法选项
+    std::uint32_t timeoutMs{};  // 超时长度
+    bool optional{};  // 是否可放弃
+};
+
+class ResolveChoiceEvent final : public EffectEvent {
+public:
+    ResolveChoiceEvent() : EffectEvent("ResolveChoiceEvent") {}
+    ChoiceId choiceId{};  // 待处理交互
+    std::vector<ChoiceOptionId> options{};  // 实际选项
+    ChoiceReason reason{};  // 手动、超时或掉线
+};
+
+class ChangeAbilityCounterEvent final : public EffectEvent {
+public:
+    ChangeAbilityCounterEvent() : EffectEvent("ChangeAbilityCounterEvent") {}
+    AbilityRef ability{};  // 目标技能
+    CounterId counterId{};  // 计数项
+    CounterOperation operation{};  // 加值或设值
+    int value{};  // 操作值
+};
+
+class EventBatch final : public EffectEvent {
+public:
+    EventBatch() : EffectEvent("EventBatch") {}
+    std::vector<EventPtr> events{};  // 有序子效果
+};
+```
+
+#### 2.7.4 控制事件（10 个）
+
+| 事件派生类 | 含义 | 专属参数 | 时机或执行约束 |
+|---|---|---|---|
+| `PlayerJoinedControl` | 实际玩家加入房间 | `player: Players` | 连接或房间模块发出；满员后自动开始，无额外准备步骤 |
+| `PlayerDisconnectedControl` | 连接断开 | `player: Players`；`connectionVersion: std::uint64_t` | 按当前状态和来源校验 |
+| `PlayerReconnectedControl` | 恢复原座位连接 | `player: Players`；`connectionVersion: std::uint64_t` | 按当前状态和来源校验 |
+| `ShoppingDeadlineControl` | 商店计时到期 | `shopId: ShopId`；`expectedVersion: std::uint64_t` | 按当前状态和来源校验 |
+| `TurnDeadlineControl` | 出牌计时到期 | `turnId: TurnId`；`player: Players`；`expectedVersion: std::uint64_t` | 按当前状态和来源校验 |
+| `ChoiceDeadlineControl` | 目标或赖子交互计时到期 | `choiceId: ChoiceId`；`expectedVersion: std::uint64_t` | 按当前状态和来源校验 |
+| `RequestRejectedControl` | 操作未被接受 | `requestId: RequestId`；`reason: std::string`；`currentVersion: std::uint64_t` | 不作为卡牌可获利的成功行为广播 |
+| `StateSnapshotReadyControl` | 为指定客户端准备同步结果 | `player: Players`；`snapshotId: SnapshotId` | 按当前状态和来源校验 |
+| `PlayOptionsReadyControl` | 选牌或赖子的合法方案已计算 | `player: Players`；`previewId: PreviewId`；`options: std::vector<ChoiceOptionId>` | 纯预览不表示已经进入出牌成功阶段 |
+| `ShopQuoteReadyControl` | 商店报价结果已计算 | `player: Players`；`previewId: PreviewId`；`quote: ShopData` | 按当前状态和来源校验 |
+
+```cpp
+class PlayerJoinedControl final : public ControlEvent {
+public:
+    PlayerJoinedControl() : ControlEvent("PlayerJoinedControl") {}
+    Players player{};  // 相关玩家
+};
+
+class PlayerDisconnectedControl final : public ControlEvent {
+public:
+    PlayerDisconnectedControl() : ControlEvent("PlayerDisconnectedControl") {}
+    Players player{};  // 相关玩家
+    std::uint64_t connectionVersion{};  // 连接代次
+};
+
+class PlayerReconnectedControl final : public ControlEvent {
+public:
+    PlayerReconnectedControl() : ControlEvent("PlayerReconnectedControl") {}
+    Players player{};  // 相关玩家
+    std::uint64_t connectionVersion{};  // 新连接代次
+};
+
+class ShoppingDeadlineControl final : public ControlEvent {
+public:
+    ShoppingDeadlineControl() : ControlEvent("ShoppingDeadlineControl") {}
+    ShopId shopId{};  // 商店会话
+    std::uint64_t expectedVersion{};  // 对应商店版本
+};
+
+class TurnDeadlineControl final : public ControlEvent {
+public:
+    TurnDeadlineControl() : ControlEvent("TurnDeadlineControl") {}
+    TurnId turnId{};  // 所属回合
+    Players player{};  // 相关玩家
+    std::uint64_t expectedVersion{};  // 对应回合版本
+};
+
+class ChoiceDeadlineControl final : public ControlEvent {
+public:
+    ChoiceDeadlineControl() : ControlEvent("ChoiceDeadlineControl") {}
+    ChoiceId choiceId{};  // 待处理交互
+    std::uint64_t expectedVersion{};  // 对应交互版本
+};
+
+class RequestRejectedControl final : public ControlEvent {
+public:
+    RequestRejectedControl() : ControlEvent("RequestRejectedControl") {}
+    RequestId requestId{};  // 被拒绝请求
+    std::string reason{};  // 拒绝原因
+    std::uint64_t currentVersion{};  // 当前版本
+};
+
+class StateSnapshotReadyControl final : public ControlEvent {
+public:
+    StateSnapshotReadyControl() : ControlEvent("StateSnapshotReadyControl") {}
+    Players player{};  // 相关玩家
+    SnapshotId snapshotId{};  // 按权限过滤的快照
+};
+
+class PlayOptionsReadyControl final : public ControlEvent {
+public:
+    PlayOptionsReadyControl() : ControlEvent("PlayOptionsReadyControl") {}
+    Players player{};  // 相关玩家
+    PreviewId previewId{};  // 预览结果
+    std::vector<ChoiceOptionId> options{};  // 合法方案
+};
+
+class ShopQuoteReadyControl final : public ControlEvent {
+public:
+    ShopQuoteReadyControl() : ControlEvent("ShopQuoteReadyControl") {}
+    Players player{};  // 相关玩家
+    PreviewId previewId{};  // 预览结果
+    ShopData quote{};  // 当前报价
+};
+```
+
+#### 2.7.5 参数、来源与重复触发约定
+
+- `Request` 表示意图，实际成功后才发布事实通知。例如 `PlayCardsRequest` 通过后发布 `CardsPlayedEvent`，失败只返回 `RequestRejectedControl`。
+- 一次出牌只发布一次成功出牌通知，自己、他人和任意玩家由处理器相对 `Context.owner()` 判断。购买、金币变化和装备完成可以是不同事实，但不能把同一事实重复发布。
+- `ShopAbilityActivationEvent` 与 `TurnAbilityActivationEvent` 分别使用原窗口时机，只表示一次已验证的主动调用；窗口保持开放时不会反复产生通知。
+- `PlayingCardsChangedEvent` 使用原因和实际牌 ID 区分换牌、改点数、改花色或临时变王；查看信息使用 `CardVisibilityChangedEvent`，不冒充物理牌面变化。
+- `EventBatch` 让一个处理器返回一个事件，同时表达多个有序效果。子项仅允许 Effect，整体成功只计一次技能成功；先整体校验再提交，失败回滚，不能把等待玩家输入的交互放进跨等待事务。
+- `QuoteShopOperationRequest` 和 `PreviewPlayRequest` 使用 Preview 模式。允许临时报价或合法性结果，禁止扣费、消耗额度、发放实际奖励、推进持久随机序列和发布技能成功通知。
+- 分数和金币的“待结算修正”与“实际余额变化”分开；`AddPendingCoinsEvent` 指定基础或额外奖励，保证 E17 的扣款只作用于规则规定的部分。
+- `Effect` 中的目标玩家与 `EventMeta.actor`、当前处理器持有者分别记录。涉及私有牌面的通知按查看权限同步。
+- 所有 Request、效果和通知仍需满足房间当前状态、牌权、结束锁定和既有游戏规则；事件类存在不等于对应操作已经获准。续玩的一致性流程、事务实现和各类效果落地调用复用既有业务模块，具体接线后续完善。
 
 ## 3. 技能事件处理
 
@@ -315,11 +1698,11 @@ Condition 收到 PlayRewardBefore 通知
 
 同一次出牌只发布一次 `PlayCommitted`，不能再发布“任意玩家出牌后”“自己出牌后”“其他玩家出牌后”三个事件。主体范围由每个技能相对自己的持有者判断；主体范围也不是技能的效果目标。
 
-`Context.event.actor` 表示发起当前行为的玩家，`Context.owner` 表示正在检查的技能持有者；效果目标由对应事件参数记录，三者允许不同。局开始、局结束等全局事件可以没有 `actor`，此时不按 `Self/Others` 匹配，使用 `Any` 并根据事件中的赢家等字段判断。
+`context.event()->meta.actor` 表示行为发起者，`context.owner()` 表示接收处理器所属玩家；效果目标由具体事件类记录，三者允许不同。局开始、局结束等全局事件可以没有 `actor`，此时不按 `Self/Others` 匹配，使用 `Any` 并根据事件中的赢家等字段判断。
 
 ### 3.2 第一版时机表
 
-区分整场游戏（Game）、一局（Round）、一巡（Trick）、一名玩家的一次行动回合（Turn）。以下编号是布尔集合下标，固定后新增时机追加在末尾，避免旧数据错位；`Count` 不是可触发时机。
+区分整场游戏（Game）、一局（Round）、一巡（Trick）、一名玩家的一次行动回合（Turn）。以下编号是布尔集合下标。原有 0～33 保留，新增 34～62 追加，当前共 63 个；旧掩码扩展时新增位为 false。只有 Signal 参与时机匹配，`Count` 不是可触发时机。
 
 | 下标 | 名称 | 精确边界与用途 |
 |---|---|---|
@@ -357,6 +1740,35 @@ Condition 收到 PlayRewardBefore 通知
 | 31 | `AbilityResolved` | 某技能成功结算后；用于镀层等监听，不是一次新的出牌 |
 | 32 | `FunctionCardEquipped` | 功能牌进入槽位后，更新持续效果来源 |
 | 33 | `FunctionCardRemoved` | 功能牌离开槽位时，撤销其持续效果来源；保留移除原因与来源快照 |
+| 34 | `ShopSlotLocked` | 货位锁定成功，由服务端确认后发布 |
+| 35 | `ShopSlotUnlocked` | 货位解锁成功，由服务端确认后发布 |
+| 36 | `BoosterPackOpened` | 卡包已付费打开，由服务端确认后发布 |
+| 37 | `BoosterPackChoiceCompleted` | 卡包候选选取完成，由服务端确认后发布 |
+| 38 | `BoosterPackSkipped` | 卡包已放弃，由服务端确认后发布 |
+| 39 | `ExpansionCardUsed` | 拓展牌获得即使用完成，由服务端确认后发布 |
+| 40 | `HandPatternUpgraded` | 牌型加强完成，由服务端确认后发布 |
+| 41 | `FacilityPurchased` | 设施购买生效，由服务端确认后发布 |
+| 42 | `CoinsChanged` | 金币余额实际变化，由服务端确认后发布 |
+| 43 | `ScoreChanged` | 累计分数实际变化，由服务端确认后发布 |
+| 44 | `PlayerStatusChanged` | 玩家状态实际变化，由服务端确认后发布 |
+| 45 | `AbilityAdded` | 技能添加完成，由服务端确认后发布 |
+| 46 | `AbilityRemoved` | 技能逻辑移除完成，由服务端确认后发布 |
+| 47 | `AbilityAbolished` | 技能被永久废除，由服务端确认后发布 |
+| 48 | `AbilityUsabilityChanged` | 技能临时可用开关变化，由服务端确认后发布 |
+| 49 | `ChoiceOpened` | 交互选择窗口建立，由服务端确认后发布 |
+| 50 | `ChoiceResolved` | 交互选择处理完成，由服务端确认后发布 |
+| 51 | `ChoiceExpired` | 交互期限已到并完成默认处理，由服务端确认后发布 |
+| 52 | `RoundWinnerLocked` | 出空时锁定赢家与手牌快照，由服务端确认后发布 |
+| 53 | `DrawPileExhausted` | 牌堆由非空变为空，由服务端确认后发布 |
+| 54 | `AllShopsClosed` | 全体商店会话关闭且交易结清，由服务端确认后发布 |
+| 55 | `FunctionCardUsabilityChanged` | 整张功能卡临时开关变化，由服务端确认后发布 |
+| 56 | `FunctionCardAbolished` | 整张功能卡被废除，由服务端确认后发布 |
+| 57 | `AbilityStateChanged` | 技能成长或蓄力状态变化，由服务端确认后发布 |
+| 58 | `DelayedEffectScheduled` | 延迟效果标记建立，由服务端确认后发布 |
+| 59 | `DelayedEffectTriggered` | 延迟标记实际执行完成，由服务端确认后发布 |
+| 60 | `DelayedEffectExpired` | 延迟标记结束或失效，由服务端确认后发布 |
+| 61 | `CoatingApplied` | 镀层施加完成，由服务端确认后发布 |
+| 62 | `CardVisibilityChanged` | 查看权限或公开信息变化，由服务端确认后发布 |
 
 商店开包、使用拓展牌、牌型加强与设施购买使用购买上下文中的商品类型和后续效果信息区分。未来出现必须单独监听的新业务边界时追加时机，不用“购买后”冒充“使用后”；当前没有为这些行为自动增加收益。
 
@@ -392,12 +1804,12 @@ TurnStart → PlayActionWindow
 
 派发时冻结候选列表，轮到每个技能时重新检查状态和条件。结算中新增的技能从后续事件开始参与；已被禁用、废除或移除的候选跳过。物理删除延迟到当前结算安全点，避免正在调用的对象被销毁。
 
-`Context.event.eventId` 标识一次真实事件，网络重试不生成新事件。每个技能对同一事件默认至多执行一次；派生事件携带来源链，默认不得重新进入链中尚未完成的同一技能。复制和重复结算若开放，必须另外规定可复制范围、次数上限和是否产生新事件，不通过递归再次发布原始出牌来实现。
+`context.event()->meta.eventId` 标识一次真实事件，网络重试不生成新事件。每个技能对同一事件默认至多执行一次；派生事件携带来源链，默认不得重新进入链中尚未完成的同一技能。复制和重复结算若开放，必须另外规定可复制范围、次数上限和是否产生新事件，不通过递归再次发布原始出牌来实现。
 
 ### 3.4 主动、被动和状态
 
-- 主动技能：玩家在允许窗口发起请求，由服务端封装为主动 `Event`（`source = Active`），同时填写目标功能卡与技能标识；只派发给被选中的技能。未主动请求不执行；超时默认放弃可选主动技能。
-- 被动技能：事件发生或规则被查询时，由系统提供被动 `Event`（`source = Passive`），按既定顺序派发给对应处理器。触发后选择目标仍属于被动技能，不因此改成主动技。
+- 主动技能：玩家提交 `ActivateAbilityRequest`，Condition 验证后生成商店或回合的主动调用通知，只选择目标技能；未主动请求不执行，超时默认放弃。
+- 被动技能：业务通知继承 `SignalEvent`，默认 `source() == Passive`，按既定顺序匹配处理器；触发后需要选择目标仍属于被动技能。
 - 同一牌可有多个技能，主动发动只调用所选技能，不把该牌的其他主动技能一起执行；被动事件只遍历被动技能。
 
 | 字段 | 本轮接口约定 |
@@ -415,59 +1827,52 @@ TurnStart → PlayActionWindow
 ### 3.5 C++17 接口草案
 
 ```cpp
-#include <optional>
-#include <vector>
-
-// 依赖事件与状态机说明中的 Context、Event 及公共枚举。
 class Handle_Event {
 public:
     virtual ~Handle_Event() = default;
 
+    std::size_t seq = 0;  // 由功能卡分配的稳定技能编号
     bool available = true;
     bool usable = true;
     AbilityType type = AbilityType::Passive;
     PlayerScope scope = PlayerScope::Any;
     std::vector<bool> time = std::vector<bool>(TOTAL_TIMES, false);
 
-    // 读取上下文，返回新事件；无输出时返回 std::nullopt。
-    virtual std::optional<Event> handle_event(const Context& context) = 0;
+    virtual EventPtr handle_event(const Context& context) = 0;
 };
 ```
 
-此接口依赖 [事件与状态机说明中的公共定义](#25-c17-接口草案)。`Players` 表示固定座位，只遍历实际参局玩家；时机枚举与布尔集合下标仍沿用 §3.2 的 34 个取值。
+公共入口返回 `EventPtr`，支持返回任意具体效果派生类；`nullptr` 表示没有后续事件。Condition 校验返回值只允许 Effect，成功后发布相应 Signal。处理器不能返回伪造的玩家 Request、连接 Control 或未经业务提交的成功通知。
 
-技能的公共入口为 `handle_event(const Context&)`。处理器通过只读上下文获取所需参数，以 `std::optional<Event>` 表达有无后续事件；效果由 `Condition` 继续执行。基类提供虚析构函数，时机集合初始化为 `TOTAL_TIMES` 个 false。
+技能需要读取特定参数时，通过 `context.event_as<BeforePlayRewardEvent>()` 等具名类型取得对应事件；类型不匹配返回空指针，不使用不安全的强制转换。一个技能包含多个效果时返回 `EventBatch`。
 
-技能由功能牌拥有；技能容器、添加、删除、废除及临时禁用的管理规则见 [功能卡说明](#43-技能管理与生命周期)。
+`seq` 是牌内稳定编号，联机和事件使用 `AbilityRef`，容器下标仅用于内部管理。技能由功能卡拥有，生命周期见 [功能卡管理](#43-技能管理与生命周期)。
 
 ### 3.6 Context 与派发流程
 
-`Condition` 接收 `Event`，根据当前流程状态校验事件，并为选定处理器生成 `Context`。处理器只读当前事件和业务状态，返回一个后续事件；状态机继续处理该事件链。
+同一房间始终复用 `Condition::context_`，每次调用前更新，不为每个事件创建另一份全局 Context。一个进程有多个房间时，各自拥有一份上下文；同一房间在调度器上串行访问。
 
-| 上下文信息 | 用途 |
+| 只读接口 | 信息 |
 |---|---|
-| `event.timing / event.eventId` | 原通知的时机及唯一编号 |
-| `owner / event.actor` | 当前处理器所属玩家与行为发起者 |
-| `event.source` | 区分主动请求与被动通知 |
-| `event.requestedCardSeq / event.requestedAbilityIndex` | 主动请求目标；被动通知为空 |
-| `reward / shop` | 状态机生成的当前待结算奖励或报价快照 |
-| `game` | 只读业务状态视图，具体查询接口后续定义 |
+| `event()` | 当前事件基类指针，可读取元数据和类别 |
+| `event_as<T>()` | 取得对应具体派生类及其专属参数；不匹配或未绑定时为空 |
+| `owner() / receiver()` | 当前处理器所属玩家和稳定技能引用 |
+| `reward() / shop()` | 当前待结算奖励或报价快照；不适用时为空 |
+| `game()` | 已有 GameState 的只读查询接口 |
 
 ```text
-Event → Condition → Context → Handle_Event::handle_event(context)
-                                  ↓
-                         新 Event / std::nullopt
-                                  ↓
-                         Condition 继续调度
+当前事件帧
+  → Condition 清理旧绑定，更新同一份 Context
+  → Handle_Event 读取 Context，返回 EventPtr 或 nullptr
+  → 清理 Context 绑定，再执行新事件或恢复父帧
+  → 下一处理器调用前按最新状态重新填充
 ```
 
-每次生成上下文时使用最新的待结算数据；返回事件由 `Condition` 执行后，再继续下一个处理器。原始事件保持不变，处理器不直接修改游戏资源、快照或事件，也不自行递归派发。
-
-空值表示没有后续事件，状态机继续其他候选；新事件表示请求执行后续处理，实际成功后再记录成功次数和处理消耗。报价预览、事件来源、队列与循环边界见 [事件与状态机说明](#24-队列返回值与结算)。
+父子事件和不同玩家之间复用同一对象，不代表共用旧参数。Condition 每次完整填充接收者、事件、奖励和报价，没有的参数必须清空。等待选择时只保存事件、交互和结算进度，恢复时重新绑定；处理器不得异步持有 Context 引用。
 
 ### 3.7 事件处理示例
 
-以下仅为接口示意，不代表正式卡牌：“自己的出牌奖励计算前，将本手待结算分数翻倍”。处理器读取上下文，并返回 `MultiplyPendingScore` 效果事件。
+以下仅为接口示意，不代表正式卡牌：“自己的出牌奖励计算前，将本手待结算分数翻倍”。处理器读取共享上下文，并返回 `MultiplyPendingScoreEvent` 的唯一所有权指针。
 
 ```cpp
 class DoubleScoreHandler final : public Handle_Event {
@@ -477,26 +1882,27 @@ public:
         time[static_cast<std::size_t>(Timing::PlayRewardBefore)] = true;
     }
 
-    std::optional<Event> handle_event(const Context& context) override {
-        if (!available || !usable || context.event.source != type) {
-            return std::nullopt;
+    EventPtr handle_event(const Context& context) override {
+        const auto* event = context.event_as<BeforePlayRewardEvent>();
+        const auto owner = context.owner();
+        if (!event || !owner || !available || !usable ||
+            event->source() != type) {
+            return nullptr;
         }
 
-        const auto index = static_cast<std::size_t>(context.event.timing);
-        if (index >= time.size() || !time[index]) {
-            return std::nullopt;
+        const auto when = event->timing();
+        if (!when || static_cast<std::size_t>(*when) >= time.size() ||
+            !time[static_cast<std::size_t>(*when)] ||
+            event->meta.actor != owner || !context.reward()) {
+            return nullptr;
         }
 
-        if (!context.event.actor ||
-            *context.event.actor != context.owner || !context.reward) {
-            return std::nullopt;
-        }
-
-        Event next;
-        next.kind = EventKind::Effect;
-        next.effect = EffectData{
-            EffectType::MultiplyPendingScore, context.owner, 2
-        };
+        auto next = std::make_unique<MultiplyPendingScoreEvent>();
+        next->target = *owner;
+        next->settlementId = event->settlementId;
+        next->numerator = 2;
+        next->denominator = 1;
+        next->rounding = RoundingRule::Floor;
         return next;
     }
 };
@@ -516,7 +1922,7 @@ public:
 
 功能卡负责记录“谁持有这张牌、这张牌是哪一个实例、包含哪些技能、整张牌当前是否有效”；各个技能分别记录自己的发动方式、时机、状态和具体效果。
 
-- 功能卡保存技能事件处理器，由 `Condition` 根据 `Event` 和牌级状态选择处理器并生成 `Context`。
+- 功能卡保存技能事件处理器，由 Condition 选择处理器并更新共享 Context。
 - `Condition` 直接调用处理器的 `handle_event(const Context&)`；处理器返回一个新 `Event` 或空值，由状态机继续执行。
 - 主动请求先核对请求玩家、目标牌与目标技能，只选择指定处理器；被动通知按既定顺序遍历。
 - 整张牌的状态与技能自身的状态共同限制执行；牌级检查通过后仍需执行 [技能发动条件检查](#34-主动被动和状态)。
@@ -542,7 +1948,7 @@ public:
 
 | 操作 | 接口 | 说明 |
 |---|---|---|
-| 事件调度 | 由 `Condition` 负责 | 选择牌内处理器，生成 `Context`，执行返回事件后再继续下一个处理器 |
+| 事件调度 | 由 `Condition` 负责 | 选择牌内处理器，更新共享 `Context`，执行返回事件后再继续下一个处理器 |
 | 添加技能 | `addAbilities(ability)` | 转移技能所有权，加入容器 |
 | 删除技能 | `deleteAbilities(index)` | 逻辑移除，并在结算安全点释放 |
 | 废除技能 | `abolishAbilities(index)` | 将该技能的 `available` 设为 false，保留实例用于显示与记录 |
@@ -551,7 +1957,7 @@ public:
 
 派发时冻结候选列表，结算中新增技能从后续事件开始参与；已被禁用、废除或移除的候选跳过。物理删除需延迟到安全点，详见 [技能结算规则](#33-结算顺序与边界)。
 
-管理接口中的 `index` 以及 `Context.event.requestedAbilityIndex` 仅适用于服务端当前稳定的技能列表；联机请求需要稳定技能编号及状态版本，不能信任客户端缓存的可变下标。实际调度、稳定 ID、次数与费用管理、交互挂起和事务处理待引擎实现时补齐。
+管理接口中的 `index` 只用于当前容器操作，网络、事件和交互统一使用 `AbilityRef` 的稳定技能编号并检查状态版本；Condition 查找编号后再映射到当前下标。实际调度、稳定 ID、次数与费用管理、交互挂起和事务处理待引擎实现时补齐。
 
 
 装备与移除分别使用 `FunctionCardEquipped`、`FunctionCardRemoved` 事件，具体边界见 [技能时机表](#32-第一版时机表)。持续效果的来源随装备、移除、失效和恢复更新。
@@ -585,7 +1991,7 @@ public:
 
 基类提供虚析构函数，以便通过基类指针正确释放派生实例。功能卡负责拥有和管理处理器；`Condition` 负责事件调度并直接调用牌内处理器。添加、删除和废除属于实例管理操作，具体功能卡由派生类实现。
 
-调度顺序：`Condition` 先检查牌仍被持有且 `available/usable` 为 true，为当前牌持有者生成 `Context`，被动通知按技能顺序选择处理器。主动请求要求 `event.actor == player`、`requestedCardSeq == seq` 且 `requestedAbilityIndex` 有效，只选择该位置的主动处理器；不合法时拒绝请求，不退回为批量派发。返回事件及其后续链处理完毕，再继续下一个候选。联机仍使用稳定技能标识和状态版本定位，再由服务端映射到当前下标。
+Condition 先检查牌级状态和持有关系，按当前接收技能刷新唯一 Context。被动通知按顺序选取处理器；主动请求按 `AbilityRef` 核对牌、技能、调用玩家、窗口和版本。返回事件链完成后再继续下一候选，删除或废除后的稳定编号不复用。
 
 ### 4.5 逐张功能卡的说明模板
 
@@ -594,7 +2000,7 @@ public:
 价格／稀有度／出售成本规则：
 技能 A：主动或被动
   响应事件／时机掩码：
-  Context 所需参数与返回 Event：
+  Context 只读参数与返回 EventPtr：
   行为主体范围：Self / Others / Any
   效果目标：
   发动条件与具体效果：
@@ -637,7 +2043,7 @@ public:
 | 倍率 | `multiplier` | `int` |
 | 基数 | `baseValue` | `int` |
 
-`std::optional<int>` 表示花色与点数可以为空，空值使用 `std::nullopt`。成员初始值、花色编码及倍率与基数的具体计算规则待后续确定。
+`std::optional<int>` 表示花色与点数可以为空，空值使用 `nullptr`。成员初始值、花色编码及倍率与基数的具体计算规则待后续确定。
 
 ## 6. 商店、回合与跨玩家效果
 
@@ -654,7 +2060,7 @@ public:
 
 局内普通操作不进入商店队列，也不缓存下一玩家的出牌。接受当前玩家的一次合法操作后关闭对应操作窗口，完成该动作的结算链，再按规则重新开放当前玩家窗口或切换下一玩家。目标玩家的被动效果或授权选择可以在他人的回合执行；选择回复、超时、掉线与重连仍由状态机处理，出牌权限、技能持有者和效果目标分别判断。
 
-跨玩家效果通过返回事件的目标字段执行。例如 P1 的处理器返回目标为 P2 的 `AddScore` 请求，`Condition` 修改 P2 的权威分数，再按规则产生相关通知。P2 的状态发生变化不会自动赋予 P2 出牌权限。
+跨玩家效果通过返回事件的目标字段执行。例如 P1 的处理器返回目标为 P2 的 `AddScoreEvent`，`Condition` 修改 P2 的权威分数，再按规则产生相关通知。P2 的状态发生变化不会自动赋予 P2 出牌权限。
 
 所有玩家完成购物或商店超时后，先结清待处理操作并关闭购物窗口，再产生开局事件。已经关闭的购物窗口拒绝迟到或重复请求。开局发牌、巡与回合推进、局末结算继续遵循 [游戏规则](README.md)。
 
@@ -681,7 +2087,7 @@ class EventListener {
 public:
     explicit EventListener(Condition& condition) : condition_(condition) {}
 
-    void publish(Event event) {
+    void publish(EventPtr event) {
         condition_.on_event(std::move(event));
     }
 
@@ -690,7 +2096,7 @@ private:
 };
 ```
 
-`EventListener` 负责适配输入，`Condition` 负责状态与调度。监听入口本身不更改手牌、金币、分数或结算上下文；`Context` 由状态机在调用处理器之前根据最新状态生成。
+`EventListener` 负责适配输入，`Condition` 负责状态与调度。监听入口本身不更改手牌、金币、分数或结算上下文；Context 由 Condition 创建一次，并在每次调用处理器之前根据最新状态更新。
 
 ## 8. 延迟与执行方式
 
@@ -706,7 +2112,7 @@ private:
 
 - 商店普通请求入队后及时启动或唤醒调度循环；局内合法普通操作直接进入当前结算，忙碌或未获授权的出牌请求不缓存。当前动作的派生事件由循环与结算栈继续处理。
 - 内部技能连锁在服务端内存中结算，再同步最终状态与必要的表现事件；玩家必须选择目标的交互会产生真实等待，应记录为等待状态。
-- `Context` 引用只读的 `GameState` 与 `Event`，仅生成必要的小型参数快照，避免每次处理复制整个牌局。
+- 每个 Condition 复用唯一 Context，只绑定当前事件和小型快照；Event 通过 unique_ptr 移交所有权，不复制整个牌局或派生对象。虚调用、类型识别和分配成本在实现后测量，确有需要时再采用对象池。
 - 事件处理路径避免同步等待磁盘、数据库或外部网络；这些工作通过独立任务完成，并按规则接收结果。
 - 检测事件循环、控制连锁工作量，重点测量复杂牌型判断和具体效果的成本。不同房间可以独立调度，同一房间的共享状态由统一入口修改。
 - 定时器用于明确的超时规则；用固定周期扫描所有状态会额外引入接近一个扫描周期的等待，应优先使用实际业务回调。
@@ -717,11 +2123,11 @@ private:
 
 | 项目 | 待补齐内容 |
 |---|---|
-| 权威业务状态 | `GameState`、玩家资源、手牌、牌权、局／巡／回合、商店会话与待结算数据 |
+| 既有业务接入 | 玩家、GameState、手牌、牌型判定、商店、随机、交互等视为已有，仅完成事件到既有接口的连接 |
 | 输入协议 | 操作请求、认证来源、合法性校验、状态版本、超时与掉线回调 |
 | 事件调度 | 商店请求队列、局内请求互斥、当前结算栈、去重、来源链、派发游标、暂停／恢复及循环预算 |
 | 事务与成功标准 | 效果执行、费用、计次、消耗、失败处理和结果同步 |
-| 稳定标识 | 房间、玩家、牌实例、技能、事件及交互标识；客户端不直接使用可变下标 |
+| 稳定标识与协议 | 复用房间、玩家、牌实例、技能、事件及交互 ID；定义 132 个事件名的序列化白名单与版本，不使用 typeid 哈希作为网络协议 |
 | 数据与计算 | 花色点数编码、基数倍率、舍入规则，以及与付费加强的接入 |
 | 验证与性能 | 真正实现后检查典型连锁、并发购物、跨玩家效果、重试、重连和延迟数据 |
 
