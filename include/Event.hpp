@@ -1,12 +1,16 @@
 #pragma once
 
 /// @file Event.hpp
-/// @brief 定义操作类型、操作参数和事件的多态数据结构，使用 C++17。
+/// @brief 定义事件的操作参数和多态数据结构，使用 C++17。
+/// 公共枚举与类型别名统一维护在 Common/enums.hpp 和 Common/types.hpp。
 /// 每个具体事件直接继承 Event，构造时固定唯一的 EventType。
 /// actor 是操作发起者；target、player、owner、viewer 等字段按各事件说明解释。
 /// 构造事件只创建数据；操作执行、合法性校验、状态修改与技能调度由外部模块负责。
 /// 请求去重、通用来源链与通用版本记录由外部调度模块管理。
 /// 默认构造后的 ID、枚举和数值是占位值，业务模块应在使用前补齐并校验。
+
+#include "Common/enums.hpp"
+#include "Common/types.hpp"
 
 #include <cstddef>
 #include <cstdint>
@@ -15,276 +19,7 @@
 #include <string>
 #include <vector>
 
-/// 房间中的玩家座位编号；实际参与人数和行动顺序由房间规则维护。
-enum class Players : std::uint8_t {
-    P1,  // 1 号座位
-    P2,  // 2 号座位
-    P3,  // 3 号座位
-    P4  // 4 号座位
-};
-
-/// 唯一的操作类型编号；0～131 分别对应 132 个具体事件，新增类型应追加在 Count 前。
-enum class EventType : std::size_t {
-    GameStart = 0,  // 整场开始；参数见 GameStartedEvent。
-    ShopEnter = 1,  // 进入局前商店；参数见 ShopEnteredEvent。
-    ShopActionWindow = 2,  // 商店窗口内的主动技能调用；参数见 ShopAbilityActivationEvent。
-    ShopRefreshQuote = 3,  // 刷新报价前；参数见 BeforeShopRefreshEvent。
-    ShopRefreshAfter = 4,  // 刷新成功后；参数见 ShopRefreshedEvent。
-    ShopBuyQuote = 5,  // 购买报价前；参数见 BeforeShopPurchaseEvent。
-    ShopBuyAfter = 6,  // 购买交付成功后；参数见 ShopPurchasedEvent。
-    ShopSellQuote = 7,  // 出售报价前；参数见 BeforeShopSaleEvent。
-    ShopSellAfter = 8,  // 出售成功后；参数见 ShopSoldEvent。
-    ShopLeave = 9,  // 离店；参数见 ShopLeftEvent。
-    RoundStart = 10,  // 本局开始；参数见 RoundStartedEvent。
-    InitialDealBefore = 11,  // 初始发牌前；参数见 BeforeInitialDealEvent。
-    InitialDealAfter = 12,  // 全体初始发牌完成；参数见 InitialCardsDealtEvent。
-    TrickStart = 13,  // 本巡开始；参数见 TrickStartedEvent。
-    TurnStart = 14,  // 当前回合开始；参数见 TurnStartedEvent。
-    PlayActionWindow = 15,  // 出牌窗口内的主动技能调用；参数见 TurnAbilityActivationEvent。
-    PlayValidate = 16,  // 验证选牌及跟牌；参数见 PlayValidationEvent。
-    PlayCommitted = 17,  // 成功提交一手牌；参数见 CardsPlayedEvent。
-    PlayRewardBefore = 18,  // 计算本手出牌奖励前；参数见 BeforePlayRewardEvent。
-    PlayRewardAfter = 19,  // 本手奖励到账后；参数见 PlayRewardGrantedEvent。
-    PassCommitted = 20,  // 确认不出牌；参数见 PlayerPassedEvent。
-    TurnEnd = 21,  // 当前回合结算结束；参数见 TurnEndedEvent。
-    TrickEnd = 22,  // 获得牌权并结束本巡；参数见 TrickEndedEvent。
-    DrawBefore = 23,  // 非初始摸牌前；参数见 BeforeCardsDrawEvent。
-    DrawAfter = 24,  // 实际摸牌完成；参数见 CardsDrawnEvent。
-    TrickDrawsAfter = 25,  // 巡末摸牌步骤完成；参数见 TrickDrawingCompletedEvent。
-    RoundEnd = 26,  // 本局结束且最后回合结算完成；参数见 RoundEndedEvent。
-    RoundRewardBefore = 27,  // 计算玩家局末奖励前；参数见 BeforeRoundRewardEvent。
-    RoundRewardAfter = 28,  // 全体局末奖励与扣款完成；参数见 RoundRewardsGrantedEvent。
-    GameEnd = 29,  // 整场结束与冠军确认；参数见 GameEndedEvent。
-    CardChanged = 30,  // 技能实际改变牌面或手牌后；参数见 PlayingCardsChangedEvent。
-    AbilityResolved = 31,  // 技能效果成功结算后；参数见 AbilityResolvedEvent。
-    FunctionCardEquipped = 32,  // 功能卡进入槽位；参数见 FunctionCardEquippedEvent。
-    FunctionCardRemoved = 33,  // 功能卡离开槽位；参数见 FunctionCardRemovedEvent。
-    ShopSlotLocked = 34,  // 货位锁定成功；参数见 ShopSlotLockedEvent。
-    ShopSlotUnlocked = 35,  // 货位解锁成功；参数见 ShopSlotUnlockedEvent。
-    BoosterPackOpened = 36,  // 卡包已付费打开；参数见 BoosterPackOpenedEvent。
-    BoosterPackChoiceCompleted = 37,  // 卡包候选选取完成；参数见 BoosterPackChoiceCompletedEvent。
-    BoosterPackSkipped = 38,  // 卡包已放弃；参数见 BoosterPackSkippedEvent。
-    ExpansionCardUsed = 39,  // 拓展牌获得即使用完成；参数见 ExpansionCardUsedEvent。
-    HandPatternUpgraded = 40,  // 牌型加强完成；参数见 HandPatternUpgradedEvent。
-    FacilityPurchased = 41,  // 设施购买生效；参数见 FacilityPurchasedEvent。
-    CoinsChanged = 42,  // 金币余额实际变化；参数见 CoinsChangedEvent。
-    ScoreChanged = 43,  // 累计分数实际变化；参数见 ScoreChangedEvent。
-    PlayerStatusChanged = 44,  // 玩家状态实际变化；参数见 PlayerStatusChangedEvent。
-    AbilityAdded = 45,  // 技能添加完成；参数见 AbilityAddedEvent。
-    AbilityRemoved = 46,  // 技能逻辑移除完成；参数见 AbilityRemovedEvent。
-    AbilityAbolished = 47,  // 技能被永久废除；参数见 AbilityAbolishedEvent。
-    AbilityUsabilityChanged = 48,  // 技能临时可用开关变化；参数见 AbilityUsabilityChangedEvent。
-    ChoiceOpened = 49,  // 交互选择窗口建立；参数见 ChoiceOpenedEvent。
-    ChoiceResolved = 50,  // 交互选择处理完成；参数见 ChoiceResolvedEvent。
-    ChoiceExpired = 51,  // 交互期限已到并完成默认处理；参数见 ChoiceExpiredEvent。
-    RoundWinnerLocked = 52,  // 出空时锁定赢家与手牌快照；参数见 RoundWinnerLockedEvent。
-    DrawPileExhausted = 53,  // 牌堆由非空变为空；参数见 DrawPileExhaustedEvent。
-    AllShopsClosed = 54,  // 全体商店会话关闭且交易结清；参数见 AllShopsClosedEvent。
-    FunctionCardUsabilityChanged = 55,  // 整张功能卡临时开关变化；参数见 FunctionCardUsabilityChangedEvent。
-    FunctionCardAbolished = 56,  // 整张功能卡被废除；参数见 FunctionCardAbolishedEvent。
-    AbilityStateChanged = 57,  // 技能成长或蓄力状态变化；参数见 AbilityStateChangedEvent。
-    DelayedEffectScheduled = 58,  // 延迟效果标记建立；参数见 DelayedEffectScheduledEvent。
-    DelayedEffectTriggered = 59,  // 延迟标记实际执行完成；参数见 DelayedEffectTriggeredEvent。
-    DelayedEffectExpired = 60,  // 延迟标记结束或失效；参数见 DelayedEffectExpiredEvent。
-    CoatingApplied = 61,  // 镀层施加完成；参数见 CoatingAppliedEvent。
-    CardVisibilityChanged = 62,  // 查看权限或公开信息变化；参数见 CardVisibilityChangedEvent。
-    BuyShopItemRequest = 63,  // 购买普通货架商品；参数见 BuyShopItemRequest。
-    BuyBoosterPackRequest = 64,  // 购买并立即打开卡包；参数见 BuyBoosterPackRequest。
-    SellFunctionCardRequest = 65,  // 出售功能卡；参数见 SellFunctionCardRequest。
-    RefreshShopRequest = 66,  // 刷新普通货架；参数见 RefreshShopRequest。
-    LockShopSlotRequest = 67,  // 锁定货位；参数见 LockShopSlotRequest。
-    UnlockShopSlotRequest = 68,  // 解锁货位；参数见 UnlockShopSlotRequest。
-    ChooseBoosterCardRequest = 69,  // 选择卡包候选；参数见 ChooseBoosterCardRequest。
-    SkipBoosterPackRequest = 70,  // 放弃已打开卡包；参数见 SkipBoosterPackRequest。
-    UpgradeHandPatternRequest = 71,  // 付费加强牌型；参数见 UpgradeHandPatternRequest。
-    BuyFacilityRequest = 72,  // 购买设施；参数见 BuyFacilityRequest。
-    FinishShoppingRequest = 73,  // 完成本次购物；参数见 FinishShoppingRequest。
-    PlayCardsRequest = 74,  // 确认出牌；参数见 PlayCardsRequest。
-    PassRequest = 75,  // 主动不出牌；参数见 PassRequest。
-    ActivateAbilityRequest = 76,  // 发动主动技能；参数见 ActivateAbilityRequest。
-    SubmitChoiceRequest = 77,  // 提交一般目标或方案；参数见 SubmitChoiceRequest。
-    ResolveWildcardRequest = 78,  // 确认赖子指定；参数见 ResolveWildcardRequest。
-    ContinueGameRequest = 79,  // 请求加赛或无尽模式；参数见 ContinueGameRequest。
-    StartNewGameRequest = 80,  // 请求开始新一场；参数见 StartNewGameRequest。
-    StateSyncRequest = 81,  // 请求状态同步；参数见 StateSyncRequest。
-    PreviewPlayRequest = 82,  // 查询选牌的合法方案；参数见 PreviewPlayRequest。
-    QuoteShopOperationRequest = 83,  // 查询商店操作报价；参数见 QuoteShopOperationRequest。
-    AddScore = 84,  // 增加实际分数；参数见 AddScoreEvent。
-    AddCoins = 85,  // 增加实际金币；参数见 AddCoinsEvent。
-    SpendCoins = 86,  // 扣除实际金币；参数见 SpendCoinsEvent。
-    AddPendingScore = 87,  // 修正待结算分数；参数见 AddPendingScoreEvent。
-    MultiplyPendingScore = 88,  // 缩放待结算分数；参数见 MultiplyPendingScoreEvent。
-    AddPendingCoins = 89,  // 修正待结算金币；参数见 AddPendingCoinsEvent。
-    ReduceShopCost = 90,  // 降低本次商店报价；参数见 ReduceShopCostEvent。
-    GrantFreeRefresh = 91,  // 增加本店免费刷新额度；参数见 GrantFreeRefreshEvent。
-    RefreshShop = 92,  // 执行一次货架刷新；参数见 RefreshShopEvent。
-    OpenBoosterPack = 93,  // 执行已获准的开包；参数见 OpenBoosterPackEvent。
-    LockShopSlot = 94,  // 执行货位锁定；参数见 LockShopSlotEvent。
-    UnlockShopSlot = 95,  // 执行货位解锁；参数见 UnlockShopSlotEvent。
-    GrantFunctionCard = 96,  // 生成并装备功能卡；参数见 GrantFunctionCardEvent。
-    RemoveFunctionCard = 97,  // 移除功能卡；参数见 RemoveFunctionCardEvent。
-    ReplaceFunctionCard = 98,  // 替换功能卡；参数见 ReplaceFunctionCardEvent。
-    AddAbility = 99,  // 给功能卡添加技能；参数见 AddAbilityEvent。
-    RemoveAbility = 100,  // 逻辑删除技能；参数见 RemoveAbilityEvent。
-    AbolishAbility = 101,  // 永久废除技能；参数见 AbolishAbilityEvent。
-    SetAbilityUsable = 102,  // 设置技能临时开关；参数见 SetAbilityUsableEvent。
-    SetFunctionCardUsable = 103,  // 设置整牌临时开关；参数见 SetFunctionCardUsableEvent。
-    AbolishFunctionCard = 104,  // 永久废除整张牌；参数见 AbolishFunctionCardEvent。
-    ApplyCoating = 105,  // 给功能卡施加镀层；参数见 ApplyCoatingEvent。
-    DrawCards = 106,  // 按规则执行非初始摸牌；参数见 DrawCardsEvent。
-    SwapCardsWithDeck = 107,  // 将指定手牌换到牌堆底并等量摸顶；参数见 SwapCardsWithDeckEvent。
-    ChangeCardRank = 108,  // 临时改变普通牌点数；参数见 ChangeCardRankEvent。
-    ChangeCardSuit = 109,  // 临时改变花色；参数见 ChangeCardSuitEvent。
-    MakeCardJoker = 110,  // 将指定牌临时变为王；参数见 MakeCardJokerEvent。
-    RevealCards = 111,  // 向指定玩家展示合法信息；参数见 RevealCardsEvent。
-    ApplyPlayerStatus = 112,  // 施加玩家状态；参数见 ApplyPlayerStatusEvent。
-    RemovePlayerStatus = 113,  // 移除玩家状态；参数见 RemovePlayerStatusEvent。
-    UpgradeHandPattern = 114,  // 执行牌型加强；参数见 UpgradeHandPatternEvent。
-    PurchaseFacility = 115,  // 执行设施购买与生效；参数见 PurchaseFacilityEvent。
-    UseExpansionCard = 116,  // 执行获得即使用的拓展牌；参数见 UseExpansionCardEvent。
-    AddDelayedEffect = 117,  // 建立延迟效果标记；参数见 AddDelayedEffectEvent。
-    OpenChoice = 118,  // 建立选择窗口并挂起相关流程；参数见 OpenChoiceEvent。
-    ResolveChoice = 119,  // 执行选择或默认方案；参数见 ResolveChoiceEvent。
-    ChangeAbilityCounter = 120,  // 改变已定义的技能成长或蓄力计数；参数见 ChangeAbilityCounterEvent。
-    EventBatch = 121,  // 有序原子组合多个效果；参数见 EventBatch。
-    PlayerJoinedControl = 122,  // 玩家加入房间；参数见 PlayerJoinedControl。
-    PlayerDisconnectedControl = 123,  // 连接断开；参数见 PlayerDisconnectedControl。
-    PlayerReconnectedControl = 124,  // 原玩家重连；参数见 PlayerReconnectedControl。
-    ShoppingDeadlineControl = 125,  // 商店计时到期；参数见 ShoppingDeadlineControl。
-    TurnDeadlineControl = 126,  // 出牌计时到期；参数见 TurnDeadlineControl。
-    ChoiceDeadlineControl = 127,  // 选择计时到期；参数见 ChoiceDeadlineControl。
-    RequestRejectedControl = 128,  // 操作请求未获接受；参数见 RequestRejectedControl。
-    StateSnapshotReadyControl = 129,  // 同步快照已经准备；参数见 StateSnapshotReadyControl。
-    PlayOptionsReadyControl = 130,  // 合法出牌或赖子方案已经计算；参数见 PlayOptionsReadyControl。
-    ShopQuoteReadyControl = 131,  // 商店报价已经计算；参数见 ShopQuoteReadyControl。
-    Count = 132  // 类型总数及掩码长度；不是一个可提交的事件类型。
-};
-
-/// 事件类型总数，可用作按 EventType 索引的数组或技能订阅掩码长度。
-inline constexpr std::size_t TOTAL_EVENT_TYPES =
-    static_cast<std::size_t>(EventType::Count);
-
-// 下列 ID 是整数类型别名，不拥有业务对象，也不提供运行时类型检查。
-using EventId = std::uint64_t;  // 一次实际事件的实例编号；由外部调度记录管理，区别于操作种类 EventType。
-using RequestId = std::uint64_t;  // 玩家请求的编号，用于关联反馈或由外部模块去重。
-using RoomId = std::uint64_t;  // 房间实例编号。
-using ShopId = std::uint64_t;  // 某名玩家本次商店会话的编号。
-using SlotId = std::uint64_t;  // 商店货位编号。
-using ProductId = std::uint64_t;  // 货架上某件商品实例的编号。
-using PackId = std::uint64_t;  // 商店所展示卡包实例的编号。
-using ChoiceId = std::uint64_t;  // 一次待处理选择交互的编号。
-using ChoiceOptionId = std::uint64_t;  // 某次选择交互中的选项编号。
-using CardId = std::uint64_t;  // 实际扑克牌实例编号，牌面变化后仍用于追踪同一张牌。
-using DefinitionId = std::uint64_t;  // 卡牌、技能、设施或效果等静态定义的编号，具体种类由字段语义确定。
-using StatusId = std::uint64_t;  // 玩家身上一项状态实例的编号。
-using CounterId = std::uint64_t;  // 技能内一个已定义计数项的编号。
-using DelayedEffectId = std::uint64_t;  // 已经建立的延迟效果实例编号。
-using RoundId = std::uint64_t;  // 整场游戏中某一局的实例编号。
-using TrickId = std::uint64_t;  // 某一局内一巡的实例编号。
-using TurnId = std::uint64_t;  // 某名玩家一次行动回合的实例编号。
-using PlayedHandId = std::uint64_t;  // 一次已提交出牌的实例编号。
-using SettlementId = std::uint64_t;  // 一次奖励或报价结算记录的编号。
-using RoundResultId = std::uint64_t;  // 本局结束时锁定的结果与手牌快照记录编号。
-using SnapshotId = std::uint64_t;  // 一份按玩家权限生成的同步快照编号。
-using PreviewId = std::uint64_t;  // 一次只读预览结果的编号。
-using ScoreValue = std::int64_t;  // 有符号 64 位分数值；操作增量与实际累计分数由字段语义区分。
-using CoinValue = std::int64_t;  // 有符号 64 位金币值；金额合法范围由具体操作规则检查。
-
-/// 出牌牌型；具体合法性和奖励由牌型模块判断。
-enum class HandPattern : std::uint8_t {
-    Single,  // 单张
-    Pair,  // 对子
-    Straight,  // 顺子
-    Bomb,  // 炸弹
-    StraightFlush  // 同花顺
-};
-/// 普通扑克牌的四种花色；王的花色处理由具体操作规则决定。
-enum class Suit : std::uint8_t {
-    Spades,  // 黑桃
-    Hearts,  // 红桃
-    Clubs,  // 梅花
-    Diamonds  // 方块
-};
-/// 已经确认的不出牌操作的原因。
-enum class PassReason : std::uint8_t {
-    Chosen,  // 玩家主动选择不出牌
-    Timeout,  // 行动超时后按规则不出牌
-    Disconnected  // 掉线期间按规则不出牌
-};
-/// 本次非初始摸牌的业务原因。
-enum class DrawReason : std::uint8_t {
-    TrickEnd,  // 巡末摸牌
-    Skill,  // 技能产生的摸牌
-    Swap  // 换牌过程中补入新牌
-};
-/// 功能卡离开槽位的原因，供外部模块清理对应效果。
-enum class RemovalReason : std::uint8_t {
-    Sold,  // 出售
-    Replaced,  // 被其他功能卡替换
-    Consumed,  // 作为消耗品使用完毕
-    Deleted  // 由规则或效果删除
-};
-/// 选择交互的业务内容；选项与授权由交互模块维护。
-enum class ChoiceKind : std::uint8_t {
-    Booster,  // 选择卡包候选
-    Wildcard,  // 指定赖子的点数或花色方案
-    Target,  // 选择玩家、牌或技能等目标
-    Option  // 选择一般规则选项
-};
-/// 交互选择完成的方式。
-enum class ChoiceReason : std::uint8_t {
-    Manual,  // 玩家主动提交选择
-    Timeout,  // 超时后采用默认方案
-    Disconnected  // 掉线期间采用规则指定方案
-};
-/// 功能卡镀层的种类；具体效果由功能卡和技能模块定义。
-enum class CoatingType : std::uint8_t {
-    Gold,  // 黄金镀层
-    Laser  // 镭射镀层
-};
-/// 整场结束后申请的续玩模式。
-enum class ContinueMode : std::uint8_t {
-    ExtraThree,  // 追加三局
-    Endless  // 进入无尽模式
-};
-/// 需要报价的商店操作。
-enum class ShopOperation : std::uint8_t {
-    Purchase,  // 购买商品
-    Sale,  // 出售功能卡
-    Refresh,  // 刷新货架
-    HandUpgrade,  // 加强牌型
-    Facility  // 购买设施
-};
-/// 本次刷新采用的结算方式；次数上限仍由商店规则检查。
-enum class RefreshMode : std::uint8_t {
-    Paid,  // 支付本次刷新费用
-    Free  // 使用已获得的免费刷新额度
-};
-/// 临时效果的有效范围；具体失效边界由生命周期模块处理。
-enum class Lifetime : std::uint8_t {
-    Event,  // 当前事件范围
-    Turn,  // 当前玩家行动回合范围
-    Trick,  // 当前一巡范围
-    Round,  // 当前一局范围
-    Shop,  // 当前商店会话范围
-    Game  // 当前整场游戏范围
-};
-/// 待结算金币修正所指向的奖励组成部分。
-enum class RewardComponent : std::uint8_t {
-    Base,  // 基础奖励部分
-    Extra  // 额外奖励部分
-};
-/// 有理数倍率运算后转换为整数时采用的取整方式。
-enum class RoundingRule : std::uint8_t {
-    Floor,  // 向下取整
-    Ceil,  // 向上取整
-    Nearest  // 取最接近的整数；等距情况由结算规则规定
-};
-/// 对技能计数项执行的数值操作。
-enum class CounterOperation : std::uint8_t {
-    Add,  // 在当前值上加 value
-    Set  // 直接把当前值设为 value
-};
+namespace cardgame {
 
 /// 用所属玩家和稳定序号引用一张功能卡；不是实际扑克牌的 CardId。
 struct CardRef {
@@ -349,9 +84,6 @@ protected:
 
 // 纯虚析构仍须提供定义，派生事件销毁时会调用这里。
 inline Event::~Event() = default;
-
-/// 持有任意具体事件的唯一所有权；移动后由接收方负责其生命周期。
-using EventPtr = std::unique_ptr<Event>;
 
 // 操作请求（21 个）：表达玩家意图或只读查询。
 
@@ -1624,3 +1356,5 @@ public:
     PreviewId previewId{};  // 预览结果
     ShopData quote{};  // 当前报价
 };  // 查询反馈：商店报价已经计算，本身不扣款或消耗免费刷新额度。
+
+}  // namespace cardgame

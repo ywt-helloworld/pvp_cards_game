@@ -2,9 +2,22 @@
 
 所有代码设计统一维护在根目录 `design.md`，后续的类定义、接口、事件协议、状态机、调度与联机实现说明都更新在此。游戏规则见 [README.md](README.md)，卡牌参考资料见 [设计调研](docs/function-card-research.md)。
 
-本文为 C++17 接口与架构草案；示例通过语法检查不表示事件循环、业务操作或网络服务已经实现。当前命名统一为 `Event`、`Condition`、`Context`、`Handle_Event`、`FunctionCards`、`Poker` 和 `EventListener`。
+当前已实现 C++17 事件数据模型和 ListenEvent 回调监听适配器；其余接口与架构仍为设计草案，事件循环、游戏业务与网络协议尚未接入。当前命名统一为 `Event`、`Condition`、`Context`、`Handle_Event`、`FunctionCards`、`Poker` 和 `ListenEvent`。
 
 事件数据模型已生成在 [include/Event.hpp](include/Event.hpp)，包含 `Event` 抽象基类和 132 个直接派生的具体事件，并保留参数与事件注释。头文件只带上事件字段所需的枚举、ID 和轻量引用；其他模块的代码仍留在本文设计草案中。包含此头文件即可使用事件类型，无需链接单独的 `.cpp` 文件。
+
+实现文件按下列目录组织：
+
+| 文件 | 命名空间与职责 |
+|---|---|
+| [include/Common/enums.hpp](include/Common/enums.hpp) | cardgame：公共枚举和事件类型总数 |
+| [include/Common/types.hpp](include/Common/types.hpp) | cardgame：ID、数值、EventPtr、EventReceiver 和 EventDisconnect 别名 |
+| [include/Event.hpp](include/Event.hpp) | cardgame：事件参数与 132 个具体事件 |
+| [include/network/ListenEvent.hpp](include/network/ListenEvent.hpp) | cardgame::network：监听器接口与通用回调转换 |
+| [src/network/ListenEvent.cpp](src/network/ListenEvent.cpp) | cardgame::network：132 种类型工厂、订阅管理和停止逻辑 |
+| [tests/ListenEvent.test.cpp](tests/ListenEvent.test.cpp) | 监听契约、参数传递、并发来源和生命周期验证 |
+
+后续网络与监听相关代码放在 include/network/ 和 src/network/，公共枚举与类型别名放在 include/Common/。头文件采用明确的命名空间，调用方使用限定名；不在头文件中引入全局 using namespace。
 
 ## 目录
 
@@ -23,7 +36,7 @@
 
 ```text
 网络操作 / 定时器 / 连接回调 / 业务动作
-  → EventListener 归一输入或发布可信事件
+  → ListenEvent 归一输入或发布可信事件
   → Condition 接收并校验：商店请求排队，局内普通操作直接进入当前结算
   → 更新本房间共享 Context，向选定的 Handle_Event 提供只读视图
   → 返回一个新 Event，或 nullptr
@@ -131,7 +144,7 @@ Context 的对象生命周期属于 Condition，内容绑定只在当前一次�
 
 ### 2.5 C++17 接口草案
 
-公共枚举、事件参数、上下文和状态机集中定义于此；技能和功能卡接口在后续章节引用它们。
+本节汇总展示公共枚举、事件参数、上下文和状态机的设计；已实现的枚举与别名以 Common 中的文件为准，事件参数以 Event.hpp 为准。下列草案均位于 cardgame 命名空间；技能和功能卡接口在后续章节引用它们。
 
 ```cpp
 #include <cstddef>
@@ -142,6 +155,8 @@ Context 的对象生命周期属于 Condition，内容绑定只在当前一次�
 #include <string>
 #include <utility>
 #include <vector>
+
+namespace cardgame {
 
 enum class Players : std::uint8_t { P1, P2, P3, P4 };
 enum class PlayerScope : std::uint8_t { Self, Others, Any };
@@ -477,6 +492,8 @@ private:
     std::vector<ResolutionFrame> resolutionStack_;
     bool processing_ = false;
 };
+
+}  // namespace cardgame
 ```
 
 `Condition::on_event(EventPtr, DispatchMeta)` 接管所有类别事件的所有权。`resolve` 推进当前结算栈；`process_event` 通过事件 `type` 确定操作，结合独立的 DispatchMeta 校验来源、状态与具体参数，再调用相应业务操作；`finish_event` 完成当前帧并按规则推进流程。Event 本身只保存操作标识和参数；DispatchMeta、队列、结算帧及操作处理表由外部模块管理。具体业务对象视为已有，只约定接入接口，不在本次实现它们。
@@ -544,6 +561,8 @@ Condition 收到 PlayRewardBefore 通知
 | `QuoteShopOperationRequest` | 查询商店操作报价 | `shopId: ShopId`；`operation: ShopOperation`；`productId: std::optional<ProductId>`；`card: std::optional<CardRef>`；`pattern: std::optional<HandPattern>`；`facilityId: std::optional<DefinitionId>` | 只读预览；不因重复查询消耗免费额度 |
 
 ```cpp
+namespace cardgame {
+
 class BuyShopItemRequest final : public Event {
 public:
     BuyShopItemRequest()
@@ -709,6 +728,8 @@ public:
     std::optional<HandPattern> pattern{};  // 加强牌型
     std::optional<DefinitionId> facilityId{};  // 设施
 };  // 玩家请求：查询商店操作报价；只读预览；不因重复查询消耗免费额度。
+
+}  // namespace cardgame
 ```
 
 #### 2.7.2 业务通知（63 个）
@@ -780,6 +801,8 @@ public:
 | `CardVisibilityChangedEvent` | 查看权限或公开信息变化 | `viewer: Players`；`cards: std::vector<CardId>` | `CardVisibilityChanged` |
 
 ```cpp
+namespace cardgame {
+
 class GameStartedEvent final : public Event {
 public:
     GameStartedEvent()
@@ -1327,6 +1350,8 @@ public:
     Players viewer{};  // 获得信息的玩家
     std::vector<CardId> cards{};  // 实际扑克牌实例
 };  // 业务通知：查看权限或公开信息变化，由 Condition 在对应时机发布，供被动技能响应。
+
+}  // namespace cardgame
 ```
 
 #### 2.7.3 效果请求（38 个）
@@ -1373,6 +1398,8 @@ public:
 | `EventBatch` | 有序原子组合多个效果 | `events: std::vector<EventPtr>` | 只允许 Effect 子事件；先校验后提交，不能跨玩家输入等待 |
 
 ```cpp
+namespace cardgame {
+
 class AddScoreEvent final : public Event {
 public:
     AddScoreEvent()
@@ -1707,6 +1734,8 @@ public:
         : Event(EventType::EventBatch) {}
     std::vector<EventPtr> events{};  // 有序子效果
 };  // 效果请求：有序原子组合多个效果；由 Condition 校验并执行，只允许 Effect 子事件；先校验后提交，不能跨玩家输入等待。
+
+}  // namespace cardgame
 ```
 
 #### 2.7.4 控制事件（10 个）
@@ -1725,6 +1754,8 @@ public:
 | `ShopQuoteReadyControl` | 商店报价结果已计算 | `player: Players`；`previewId: PreviewId`；`quote: ShopData` | 按当前状态和来源校验 |
 
 ```cpp
+namespace cardgame {
+
 class PlayerJoinedControl final : public Event {
 public:
     PlayerJoinedControl()
@@ -1807,6 +1838,8 @@ public:
     PreviewId previewId{};  // 预览结果
     ShopData quote{};  // 当前报价
 };  // 查询反馈：商店报价已经计算，本身不扣款或消耗免费刷新额度。
+
+}  // namespace cardgame
 ```
 
 #### 2.7.5 参数、来源与重复触发约定
@@ -1971,6 +2004,8 @@ Condition 结算帧中的 `DispatchMeta.eventId` 标识一次真实事件，网�
 ### 3.5 C++17 接口草案
 
 ```cpp
+namespace cardgame {
+
 // 技能模块的枚举，不属于事件数据模型。
 enum class AbilityType : std::uint8_t { Active, Passive };
 
@@ -1987,6 +2022,8 @@ public:
 
     virtual EventPtr handle_event(const Context& context) = 0;
 };
+
+}  // namespace cardgame
 ```
 
 公共入口返回 `EventPtr`，支持返回任意具体效果派生类；`nullptr` 表示没有后续事件。Condition 校验返回值只允许 Effect，成功后发布相应 Signal。处理器不能返回伪造的玩家 Request、连接 Control 或未经业务提交的成功通知。
@@ -2022,6 +2059,8 @@ public:
 以下仅为接口示意，不代表正式卡牌：“自己的出牌奖励计算前，将本手待结算分数翻倍”。处理器读取共享上下文，并返回 `MultiplyPendingScoreEvent` 的唯一所有权指针。
 
 ```cpp
+namespace cardgame {
+
 class DoubleScoreHandler final : public Handle_Event {
 public:
     DoubleScoreHandler() {
@@ -2052,6 +2091,8 @@ public:
         return next;
     }
 };
+
+}  // namespace cardgame
 ```
 
 `Condition` 校验并执行返回事件，修改当前待结算分数；实际到账仍由奖励阶段完成。处理器返回的事件 ID 与来源由状态机统一补齐，不能把它当作一次新的实际出牌。
@@ -2117,6 +2158,8 @@ public:
 #include <memory>
 #include <vector>
 
+namespace cardgame {
+
 class FunctionCards {
 public:
     FunctionCards(Players owner, std::size_t sequence)
@@ -2133,6 +2176,8 @@ public:
     virtual bool deleteAbilities(std::size_t index) = 0;
     virtual bool abolishAbilities(std::size_t index) = 0;
 };
+
+}  // namespace cardgame
 ```
 
 基类提供虚析构函数，以便通过基类指针正确释放派生实例。功能卡负责拥有和管理处理器；`Condition` 负责事件调度并直接调用牌内处理器。添加、删除和废除属于实例管理操作，具体功能卡由派生类实现。
@@ -2171,6 +2216,8 @@ Condition 先检查牌级状态和持有关系，按当前接收技能刷新唯�
 ```cpp
 #include <optional>
 
+namespace cardgame {
+
 class Poker {
 public:
     bool isJoker;              // 是否为王（赖子）
@@ -2179,6 +2226,8 @@ public:
     int multiplier;          // 倍率
     int baseValue;           // 基数
 };
+
+}  // namespace cardgame
 ```
 
 | 含义 | 变量名 | 类型 |
@@ -2212,37 +2261,71 @@ public:
 
 ## 7. 事件监听与输入入口
 
-`EventListener` 是输入适配入口，通过回调接收实际发生的变化。游戏逻辑在完成动作时直接产生对应事件，监听入口负责转交；不用持续扫描所有玩家状态来猜测是否发生了出牌或购买。
+已实现的监听类为 cardgame::network::ListenEvent。输入源在操作、计时器或连接变化实际发生时触发回调，监听器立即构造对应的 Event 派生对象，映射操作参数，再把唯一所有权交给 EventReceiver。输入源、监听适配器和接收端分别负责产生事实、转换数据和后续处理。
 
-| 来源 | 产生事件或请求的时点 |
+| 接口 | 行为 |
 |---|---|
-| 网络操作 | 收到已识别玩家的操作消息，提交待校验请求 |
-| 定时器 | 对应计时器到期时回调，附带所属交互和状态版本 |
-| 连接管理 | 掉线或重连回调时，关联原玩家与房间 |
-| 游戏业务 | 出牌、购买、摸牌或效果真正完成时，由负责该动作的逻辑发布通知 |
-| 技能处理器 | 返回一个后续 `Event`，由 `Condition` 继续处理 |
+| ListenEvent(EventReceiver) | 设置事件接收函数；拒绝空接收函数 |
+| create_event(EventType, actor) | 按编号创建全部 132 种具体事件中的一种；仅填写类型和 actor，其他参数由调用方填写 |
+| listen<EventT, Args...>(subscribe, translate) | 注册来源回调；每次回调创建 EventT，调用 translate(EventT&, Args...) 填入参数，再交付接收端 |
+| stop() | 停止新事件交付并取消全部订阅；同一实例停止后不再启动 |
+| listening() / subscription_count() | 查询是否仍接收输入及当前持有的订阅数 |
 
-玩家请求和动作成功通知分别处理：收到“我要出牌”先交 `Condition` 验证，成功提交后才能产生 `PlayCommitted`。收到“我要购买”也必须完成权限、价格、余额和交付校验。客户端不能直接声明出牌成功、发奖或内部效果已经发生。请求协议及来源校验随网络层实现补齐。
+subscribe 的契约是接收 std::function<void(Args...)>，返回非空 EventDisconnect。取消函数由来源模块实现，应保证不抛异常。该契约可以适配现有回调接口、信号连接令牌或定时器回调，无需统一各来源的数据结构。translate 可以接收不同类型、不同数量的参数，也可以转移 move-only 数据的所有权。
 
-下面是可信内部事件的转交接口示意，网络解析和定时器注册尚未实现：
+| 来源 | 注册及转换的时点 |
+|---|---|
+| 网络操作 | 网络层解析并识别请求与玩家后触发回调，转换为相应请求事件 |
+| 定时器 | 到期时提供所属局面、交互与版本，转换为对应超时事件 |
+| 连接管理 | 加入、掉线或重连时提供玩家与连接代次，转换为对应连接事件 |
+| 游戏业务 | 动作真实提交后触发业务回调，转换为对应事实通知 |
+| 技能处理器 | 已经返回 EventPtr 的内部技能链继续交给 Condition，无需再次转换 |
+
+网络层负责协议解析、玩家身份与允许的消息类型；不能把客户端任意声明的类型直接当作服务端成功通知或效果。ListenEvent 的工厂是内部对象构造接口，构造对象并不表示操作已通过校验。输入源注册和字段映射由来源模块提供，当前仓库尚无 socket、界面事件或定时器后端，监听器本身不创建这些后端。
+
+下面是可独立编译的接线示例，PlayInput 表示已有网络层提供的一种解析结果。实际项目可直接使用原有消息类型：
 
 ```cpp
-#include <utility>
+#include "network/ListenEvent.hpp"
 
-class EventListener {
-public:
-    explicit EventListener(Condition& condition) : condition_(condition) {}
+namespace cardgame::examples {
 
-    void publish(EventPtr event, DispatchMeta meta) {
-        condition_.on_event(std::move(event), std::move(meta));
-    }
-
-private:
-    Condition& condition_;
+struct PlayInput {
+    TurnId turnId;
+    std::vector<CardId> cards;
+    std::vector<WildcardAssignment> wildcards;
 };
+
+bool bind_play_input(
+    network::ListenEvent& listener,
+    const std::function<EventDisconnect(
+        std::function<void(const PlayInput&)>)>& subscribe,
+    Players authenticatedPlayer) {
+    return listener.listen<PlayCardsRequest, const PlayInput&>(
+        subscribe,
+        [authenticatedPlayer](PlayCardsRequest& event, const PlayInput& input) {
+            event.actor = authenticatedPlayer;
+            event.turnId = input.turnId;
+            event.cards = input.cards;
+            event.wildcards = input.wildcards;
+        });
+}
+
+}  // namespace cardgame::examples
 ```
 
-`EventListener` 负责适配输入，`Condition` 负责状态与调度。监听入口本身不更改手牌、金币、分数或结算上下文；Context 由 Condition 创建一次，并在每次调用处理器之前根据最新状态更新。
+接收端通过 EventReceiver 捕获房间执行器或 Condition，结合来源模块维护的 DispatchMeta 转交事件。多个线程可以产生来源回调，接收端必须把同一房间的事件投递到串行执行器；ListenEvent 只同步订阅集合，不自行维护商店队列或执行业务操作。参数映射器若包含可变共享状态，也应由调用方提供同步。
+
+停止时先关闭事件交付，再在互斥锁外取消订阅，允许取消过程重入监听器。来源残留回调通过弱引用和停用标记安全返回；注册失败后的残留回调也会停用。已经进入接收函数的调用可以继续完成，销毁接收对象前应由来源模块或房间执行器等待这些调用结束。
+
+参数映射或接收函数的异常传回来源调用方，未完成映射的事件不交付。显式 stop() 会尝试全部取消函数后重新抛出第一个异常；析构期间只执行清理。来源注册函数即使同步触发首个回调，或该回调中停止监听器，也会正确取消刚刚建立的订阅。
+
+验证用例见 tests/ListenEvent.test.cpp，覆盖 132 种工厂映射、不同参数来源、无效类型、注册及映射失败、停止与析构、同步重入、并发来源和 move-only 参数。可在仓库根目录使用 C++17 编译器运行：
+
+```text
+g++ -std=c++17 -Wall -Wextra -Werror -pedantic -pthread -Iinclude src/network/ListenEvent.cpp tests/ListenEvent.test.cpp -o ListenEvent.test.exe
+./ListenEvent.test.exe
+```
 
 ## 8. 延迟与执行方式
 
@@ -2263,18 +2346,18 @@ private:
 - 检测事件循环、控制连锁工作量，重点测量复杂牌型判断和具体效果的成本。不同房间可以独立调度，同一房间的共享状态由统一入口修改。
 - 定时器用于明确的超时规则；用固定周期扫描所有状态会额外引入接近一个扫描周期的等待，应优先使用实际业务回调。
 
-在实现后记录输入到达、商店请求入队（如适用）、开始处理、事件链完成和结果发出的时间，分别统计服务端调度等待、商店排队等待、连锁耗时与端到端耗时；关联 `eventId`、`rootEventId`，便于定位慢技能和重复链。当前没有运行中的对局引擎或实测数据，不能给出可靠的毫秒数；仅凭增加这些类不能判断最终延迟。
+在实现后记录输入到达、商店请求入队（如适用）、开始处理、事件链完成和结果发出的时间，分别统计服务端调度等待、商店排队等待、连锁耗时与端到端耗时；关联 `eventId`、`rootEventId`，便于定位慢技能和重复链。当前已验证监听转换与生命周期契约；完整对局引擎尚未接入，仍无端到端延迟数据。
 
 ## 9. 后续实现事项
 
 | 项目 | 待补齐内容 |
 |---|---|
 | 既有业务接入 | 玩家、GameState、手牌、牌型判定、商店、随机、交互等视为已有，仅完成事件到既有接口的连接 |
-| 输入协议 | 操作请求、认证来源、合法性校验、状态版本、超时与掉线回调 |
+| 输入协议与来源接入 | 将网络解析、认证会话、计时器和连接模块接入 ListenEvent 的 subscribe / translate 契约；对局合法性由 Condition 判断 |
 | 事件调度 | 商店请求队列、局内请求互斥、当前结算栈、去重、来源链、派发游标、暂停／恢复及循环预算 |
 | 事务与成功标准 | 效果执行、费用、计次、消耗、失败处理和结果同步 |
 | 稳定标识与协议 | 复用房间、玩家、牌实例、技能、事件及交互 ID；定义 132 个事件名的序列化白名单与版本，不使用 typeid 哈希作为网络协议 |
 | 数据与计算 | 花色点数编码、基数倍率、舍入规则，以及与付费加强的接入 |
-| 验证与性能 | 真正实现后检查典型连锁、并发购物、跨玩家效果、重试、重连和延迟数据 |
+| 验证与性能 | 监听适配契约已有测试；对局接入后继续验证典型连锁、并发购物、跨玩家效果、重试、重连和延迟 |
 
 后续的代码设计增补直接修改本文件。具体卡牌的玩法、价格与平衡数值仍按游戏规则和卡池设计审定。
