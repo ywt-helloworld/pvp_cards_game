@@ -1,6 +1,6 @@
 # 卡牌技能设计
 
-本文说明卡牌技能的设计，以及使用 C++17 抽象基类 `Ability` 实现这些设计。`Ability` 作为事件处理器，统一通过 `handle_event(Context&)` 接收事件，读取参数、判断条件并执行对应效果。功能牌的持有者、实例、技能容器与牌级状态见 [功能卡说明](function-cards.md)。本文为接口草案，尚未实现对局引擎。
+本文说明卡牌技能的设计，以及使用 C++17 抽象基类 `Handle_event` 实现这些设计。`Handle_event` 作为事件处理器，统一通过 `handle_event(Context&)` 接收事件，读取参数、判断条件并执行对应效果。功能牌的持有者、实例、技能容器与牌级状态见 [功能卡说明](function-cards.md)。本文为接口草案，尚未实现对局引擎。
 
 ## 1. 时机与行为主体分别记录
 
@@ -200,9 +200,9 @@ struct Context {
     std::optional<ShopData> shop;
 };
 
-class Ability {
+class Handle_event {
 public:
-    virtual ~Ability() = default;
+    virtual ~Handle_event() = default;
 
     bool available = true;
     bool usable = true;
@@ -243,7 +243,7 @@ public:
 真实事件 / 玩家主动请求
   → 服务端校验并构造 Context
   → 选择功能卡，调用 FunctionCards::handle_event(context)
-  → 按规则选择其技能，调用 Ability::handle_event(context)
+  → 按规则选择其技能，调用 Handle_event::handle_event(context)
   → 技能读取当前事件参数，判断条件，处理对应效果
   → 返回是否处理，系统记录次数、消耗与派生事件
 ```
@@ -259,9 +259,9 @@ public:
 下面是接口用法示意，不代表已确定的正式功能卡：“自己的出牌奖励计算前，将本手待结算分数翻倍”。技能从 `Context.reward` 读取数值，并将修正结果写回当前结算。
 
 ```cpp
-class DoubleScoreAbility final : public Ability {
+class DoubleScoreHandler final : public Handle_event {
 public:
-    DoubleScoreAbility() {
+    DoubleScoreHandler() {
         scope = PlayerScope::Self;
         time[static_cast<std::size_t>(Timing::PlayRewardBefore)] = true;
     }

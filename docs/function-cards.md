@@ -2,7 +2,7 @@
 
 功能卡（下文也称功能牌）是放入玩家槽位并持续持有的卡牌实例，由 C++17 抽象基类 `FunctionCards` 表示。一张功能卡可以包含多个技能，也可以同时包含主动与被动技能。
 
-技能分类、生效时机、事件参数、事件处理规则和 `Ability` 接口统一见 [技能说明](ability-system.md)。本文为设计草案，尚未实现功能卡与对局引擎。
+技能分类、生效时机、事件参数、事件处理规则和 `Handle_event` 接口统一见 [技能说明](ability-system.md)。本文为设计草案，尚未实现功能卡与对局引擎。
 
 ## 1. 功能卡与技能的关系
 
@@ -19,7 +19,7 @@
 |---|---|---|
 | `player` | `Players` | 当前持有者，使用固定座位枚举 |
 | `seq` | `std::size_t` | 持有者范围内的稳定实例序号 |
-| `abilities` | `std::vector<std::unique_ptr<Ability>>` | 由这张牌拥有的技能，按顺序保存 |
+| `abilities` | `std::vector<std::unique_ptr<Handle_event>>` | 由这张牌拥有的技能，按顺序保存 |
 | `available` | `bool`，初始 true | 整张牌仍然有效 |
 | `usable` | `bool`，初始 true | 整张牌当前允许执行技能的开关 |
 
@@ -49,7 +49,7 @@
 
 ## 4. C++17 接口草案
 
-以下接口依赖 [技能说明中的公共枚举、上下文声明与 Ability 定义](ability-system.md#5-c17-接口草案)，代码应接在该段定义之后使用。
+以下接口依赖 [技能说明中的公共枚举、上下文声明与 Handle_event 定义](ability-system.md#5-c17-接口草案)，代码应接在该段定义之后使用。
 
 ```cpp
 #include <cstddef>
@@ -64,14 +64,14 @@ public:
 
     Players player;
     std::size_t seq;
-    std::vector<std::unique_ptr<Ability>> abilities;
+    std::vector<std::unique_ptr<Handle_event>> abilities;
     bool available = true;
     bool usable = true;
 
     // 统一事件入口；根据 context.source 与请求目标选择技能。
     // 返回是否至少一个技能成功处理，不能短路跳过后续处理器。
     virtual bool handle_event(Context& context) = 0;
-    virtual bool addAbilities(std::unique_ptr<Ability> ability) = 0;
+    virtual bool addAbilities(std::unique_ptr<Handle_event> ability) = 0;
     virtual bool deleteAbilities(std::size_t index) = 0;
     virtual bool abolishAbilities(std::size_t index) = 0;
 };
