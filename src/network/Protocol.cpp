@@ -46,6 +46,7 @@ std::string state_message(const Scheduler& g,Players viewer) {
     out<<"{\"type\":\"state\",\"seat\":"<<static_cast<unsigned>(viewer)
        <<",\"version\":"<<g.version()<<",\"phase\":"<<json_string(phases[static_cast<unsigned>(g.phase())])
        <<",\"round\":"<<g.round()<<",\"turn\":"<<g.turn()<<",\"acting\":"<<static_cast<unsigned>(g.acting_player())
+       <<",\"remainingMs\":"<<g.remaining_ms()
        <<",\"deck\":"<<g.deck_remaining()<<",\"players\":[";
     for(unsigned i=0;i<4;++i) {
         if(i) { out<<','; }
@@ -66,7 +67,13 @@ std::string state_message(const Scheduler& g,Players viewer) {
                <<",\"name\":"<<json_string(c->name())<<"}";
         }out<<"]}";
     }
-    out<<"],\"hand\":[";
+    const auto& self=g.player(viewer);
+    out<<"],\"self\":{\"functionSlots\":"<<self.functionSlots<<",\"upgrades\":[";
+    for(std::size_t i=0;i<self.upgrades.size();++i){if(i)out<<',';out<<self.upgrades[i];}
+    out<<"],\"facilities\":[";
+    bool firstFacility=true;
+    for(const auto facility:self.facilities){if(!firstFacility)out<<',';firstFacility=false;out<<facility;}
+    out<<"]},\"hand\":[";
     const auto& hand=g.player(viewer).hand;
     for(std::size_t i=0;i<hand.size();++i) {
         if(i) { out<<','; }
@@ -82,6 +89,9 @@ std::string state_message(const Scheduler& g,Players viewer) {
     if(g.phase()==GamePhase::Shopping) {
         const auto& s=g.shop(viewer);
         out<<"{\"id\":"<<s.id<<",\"done\":"<<(s.done?"true":"false")<<",\"refreshes\":"<<s.refreshes
+           <<",\"paidRefreshes\":"<<s.paidRefreshes<<",\"freeRefreshes\":"<<s.freeRefreshes
+           <<",\"upgradeDiscountUsed\":"<<(s.upgradeDiscountUsed?"true":"false")
+           <<",\"refreshDiscountUsed\":"<<(s.refreshDiscountUsed?"true":"false")
            <<",\"facility\":"<<s.facility<<",\"offers\":[";
         for(std::size_t i=0;i<s.offers.size();++i) {
             if(i) { out<<','; }

@@ -65,6 +65,13 @@ public:
     const std::optional<MoveOption>& table_move() const noexcept { return table_; }
     const std::vector<Players>& winners() const noexcept { return winners_; }
     std::uint64_t version() const noexcept { return version_; }
+    /// 当前服务器截止时间的剩余毫秒；客户端只展示，不决定是否超时。
+    std::int64_t remaining_ms() const noexcept {
+        if (phase_ != GamePhase::Shopping && phase_ != GamePhase::Playing) return 0;
+        const auto value = std::chrono::duration_cast<std::chrono::milliseconds>(
+            deadline_ - std::chrono::steady_clock::now()).count();
+        return value > 0 ? value : 0;
+    }
     Register& registry() noexcept { return registry_; }
     const Register& registry() const noexcept { return registry_; }
     const Condition& condition() const noexcept { return condition_; }

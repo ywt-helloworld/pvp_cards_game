@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#102b25">
+  <meta name="description" content="奶扑克四人联机测试版：购入功能牌，组合手牌，争夺分数。支持手机横屏。">
+  <title>奶扑克 · 联机测试</title>
+  <link rel="stylesheet" href="/assets/style.css">
+  <script type="module" src="/assets/app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">奶扑克 <span>联机测试</span></a>
+    <div class="toptools"><span id="connection" class="connection">连接中</span><button id="rulesButton" class="quiet">玩法</button><button id="fullscreen" class="quiet">全屏</button></div>
+  </header>
+  <div class="rotate-hint">手机横屏体验更好 · 可点击右上角「全屏」</div>
+  <main id="app" aria-live="polite">
+    <section class="entry">
+      <div class="entry-intro"><p class="eyebrow">4 人 · 实时对战 · 8 局</p><h1>一手牌，<br>一点新规则。</h1><p>买下功能牌，让每次出牌都多一点收益。<br>凑齐四位玩家，即刻开始。</p><div class="plain-demo"><span>单张 3<br><small>基础 +1 分</small></span><span>功能牌<br><small>出牌 +1 金币</small></span></div></div>
+      <form id="joinForm" class="join-panel">
+        <h2>坐下一起玩</h2><p class="muted">每个标签页都是独立玩家，可开四个标签页自测。</p>
+        <label for="playerName">你的名字</label><input id="playerName" name="name" maxlength="20" autocomplete="nickname" placeholder="输入名字" required>
+        <label for="roomCode">房间号 <small>加入朋友的房间时填写</small></label><input id="roomCode" name="room" maxlength="6" inputmode="text" autocomplete="off" placeholder="六位房间号，如 A1B2C3">
+        <button class="primary" type="submit" id="joinRoom">加入房间</button><button class="secondary" type="button" id="createRoom">创建新房间</button>
+        <p id="joinError" class="error" role="alert"></p><p class="fineprint">当前使用 10 张 Demo 功能牌。卡包与拓展牌尚未开放。</p>
+      </form>
+    </section>
+  </main>
+  <div id="toast" role="status" class="toast" hidden></div>
+  <dialog id="rules"><div class="dialog-head"><h2>怎么玩</h2><button id="closeRules" aria-label="关闭玩法">关闭</button></div>
+    <div class="rules-text"><p>四人进入同一房间后自动开始，共 8 局。先逛商店，再每人发 7 张牌。金币和分数由服务器结算。</p><p>点击手牌选择，点击「出牌」。跟牌需要相同牌型、相同张数、点数恰好大一档；2 和炸弹有特殊压制规则。可以点击「查看方案」检查选牌。领出者不能不出。</p><p>大小王是赖子。出现多个合法方案时，从弹窗选择一种确定含义。顺子至少三张，A 可以放两端，不能跨两端绕回。</p><p>一巡无人继续压过时，按顺序摸牌。有人出完手牌后立即结束本局，结算奖励并进入下一次商店。最终累计得分最高者胜出。</p><p>商店 60 秒，出牌与方案选择 30 秒。超时跟牌自动不出，领出自动出最小单张。断线后可刷新同一标签页重连。房间在服务器重启后清空。</p><p>功能牌显示触发条件、加分和金币数值。正式卡包、拓展牌与 U06 尚未接入这个测试版。</p></div>
+  </dialog>
+  <dialog id="choiceDialog"><div class="dialog-head"><h2>确定出牌方案</h2><span id="choiceCount"></span></div><p class="muted">请选择牌型与赖子替代值。确认后立即出牌。</p><div id="choices" class="choices"></div><div id="choicePages" class="choice-pages"></div></dialog>
+</body>
+</html>

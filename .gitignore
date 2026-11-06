@@ -2,3 +2,8 @@ build/
 *.exe
 *.o
 __pycache__/
+.tools/
+web/node_modules/
+web/dist/
+deploy/artifacts/
+test-results/

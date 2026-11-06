@@ -32,6 +32,7 @@
 - [8. 延迟与执行方式](#8-延迟与执行方式)
 - [9. 后续实现事项](#9-后续实现事项)
 - [10. 服务器构建与协议](#10-服务器构建与协议)
+- [11. 网页版与服务器部署](#11-网页版与服务器部署)
 
 ## 1. 总体架构
 
@@ -1890,3 +1891,86 @@ state 包含阶段、局、回合、当前行动者、公开玩家信息、牌�
 服务器按房间单线程处理输入和截止时间，非阻塞套接字支持部分读写，限制输入行与积压输出。断线后保留 token 和资源，重连可替换旧连接；不是重新加入新玩家。不提供投降或机器人补位。
 
 所有代码设计继续维护在本文件。正式规则见 README.md，运行说明中的 Demo 卡池只用于验证现有架构和基础流程。
+
+## 11. 网页版与服务器部署
+
+### 11.1 包装层与房间
+
+浏览器通过同源 Socket.IO 连接 Node 20 网关；网关为每个房间启动一个现有 C++ `cardgame_server` 进程，绑定随机的本地端口。每个玩家对应一条私有 TCP 连接，继续使用第 10 节协议。外部仅开放 Nginx 的 80 端口；Node 固定监听 `127.0.0.1:3000`，规则进程也仅监听 loopback。
+
+```mermaid
+flowchart LR
+    A[四位网页玩家] -->|HTTP / WebSocket| B[Nginx :80]
+    B -->|静态文件| C[/var/www/cardgame/client]
+    B -->|/socket.io/| D[Node + Socket.IO 127.0.0.1:3000]
+    D -->|每人私有 TCP 连接| E[房间 A · C++ 权威规则进程]
+    D -->|每人私有 TCP 连接| F[房间 B · C++ 权威规则进程]
+```
+
+`web/server/server.mjs` 管理六位房间号、四人座位、生命周期、进程和 Socket.IO；`commands.mjs` 将结构化操作白名单转为原协议；`main.mjs` 是独立启动入口，兼容 PM2 的模块加载方式。规则、发牌、随机数、事件队列和结算仍由 C++ 执行。客户端不能传入 actor 或内部事件；网关分配递增请求编号，C++ 再验证所属手牌、时机和费用。
+
+房间人数固定为四人，第四人加入后自动进入商店。最多同时保留 12 个房间，所有玩家离线十分钟后回收房间进程。网关为每位玩家生成随机网页会话 token，另行私藏 C++ token；玩家状态只发给本人，禁止把私有状态广播到整个房间。名字用文本或 HTML 转义显示，输入限制长度和换行；消息上限 16 KiB，每连接操作限流 25 次/秒，浏览器连接检查同源。
+
+网页 token 存在 `sessionStorage`，每个标签页独立；原标签页刷新后自动恢复。Socket.IO 连接中断给予五秒重连宽限，期间保留 TCP 连接；超过宽限后通知 C++ 掉线。开局前离线超过宽限释放座位并使 token 失效；开局后保留座位并按已有超时规则处理。已有在线连接不能被同一 token 抢占。网关或服务器重启会清空内存房间和会话；当前测试版没有持久化恢复。
+
+### 11.2 网页客户端
+
+`web/client/index.html`、`app.js`、`style.css` 提供房间创建/加入、四人状态、购物、出售、锁定/刷新、五种牌型加强、设施、手牌点选、预览、出牌/不出、赖子方案分页选择、八局结算、加赛/无尽/重开投票。卡面使用数字、花色与功能说明，未加入图片素材。
+
+响应式页面支持手机横屏、触摸点选和手牌横向滚动，处理安全区；竖屏保留可用布局并提示横屏。全屏按钮在浏览器允许时请求横屏。纯 HTTP 下复制邀请链接可能不受浏览器支持，此时显示房间号，仍可手动分享网址。`remainingMs` 来自 C++ 截止时间，客户端只显示倒计时，不能决定超时。
+
+协议新增本人专属 `self.functionSlots`、`self.upgrades`、`self.facilities`，以及商店的付费/免费刷新次数和折扣使用标记；不公开其他玩家的私有商店信息。测试卡池效果说明与当前默认十张 Demo 卡一致；接入正式卡池时应由卡牌定义下发说明。
+
+### 11.3 本地开发与验证
+
+先按第 10 节构建 C++。在 `web` 目录运行：
+
+```text
+npm ci
+npm run build
+npm test
+npm run test:browser
+npm start
+```
+
+Windows 默认使用 `build/cardgame_server.exe`；其他平台通过 `CARDGAME_ENGINE` 设置本机可执行文件绝对路径。Node 默认监听 `127.0.0.1:3000`，本地同时提供构建后的网页文件。浏览器测试使用本机 Edge，可通过 `BROWSER_PATH` 指向 Chrome；不在目标服务器安装浏览器。`TARGET_URL` 可以指向已部署实例。
+
+`tests/gateway.test.mjs` 验证四人购物、资源扣费、私有数据过滤、发牌、出牌、越权拒绝、重连、跨房间隔离与在线座位保护。`tests/browser.mjs` 通过真实浏览器以 844×390 手机横屏完成四人入座、购买、发牌、出牌和刷新重连，并检查控制台错误与页面横向溢出。C++ 原有四组 CTest 继续验证全部事件、结算链、完整八局与原生 TCP 协议。
+
+### 11.4 构建产物与部署
+
+服务器使用 Ubuntu 22.04、Node 20、Nginx 和 PM2。**禁止在目标服务器运行 `npm install`、`npm ci`、`npm run build`，也不在服务器编译 C++。** 所有安装、前端打包、生产依赖裁剪和 C++ 编译都在工作站完成。
+
+`deploy/build-release.py` 在本地使用 Zig 0.15.2 交叉编译 `x86_64-linux-musl` 静态 ELF，从而避免 Windows 二进制或不同 glibc 版本问题；再用 esbuild 打包网页，并在本地产生仅含运行依赖的 `node_modules`，排除开发依赖和可选原生加速模块。依赖版本与完整性由 `web/package-lock.json` 锁定。需要本机 Node、npm、Python 和 Zig：
+
+```text
+python deploy/build-release.py --zig /path/to/zig
+```
+
+可用 `--npm-cli /path/to/npm-cli.js` 指定本地 npm 入口，`--engine /path/to/prebuilt-linux-elf` 复用同一源码已构建的 Linux 文件。输出位于被忽略的 `deploy/artifacts/`，包括按 UTC 时间命名的压缩包与 SHA256 校验值。只上传压缩包和激活脚本：
+
+```text
+scp deploy/artifacts/RELEASE.tar.gz deploy/activate.sh cardgame:/var/tmp/
+ssh cardgame 'bash /var/tmp/activate.sh RELEASE SHA256 /var/tmp/RELEASE.tar.gz'
+```
+
+`deploy/activate.sh` 校验压缩包，解压到 `/var/www/cardgame/releases/RELEASE`，检查 Linux/Node 入口，切换稳定路径的符号链接，检查 Nginx 配置，启动 PM2，完成健康检查后重载 Nginx，保存进程列表并启用 `pm2-root` 的 systemd 开机恢复。失败时恢复先前链接与 Nginx 配置。保留旧版本，避免覆盖既有真实目录。版本切换会重启网关，测试房间随之清空。
+
+| 路径或服务 | 用途 |
+|---|---|
+| `/var/www/cardgame/client` | Nginx root，指向当前版本静态网页 |
+| `/var/www/cardgame/server` | Node 入口、生产依赖与 `bin/cardgame_server` |
+| `/var/www/cardgame/ecosystem.config.cjs` | PM2 配置，单进程 fork，180 MiB 网关内存重启阈值 |
+| `/etc/nginx/sites-available/cardgame` | 指定 IP 的站点，不修改其他站点配置 |
+| `/socket.io/` | 反代到 `127.0.0.1:3000`，HTTP/1.1，显式 Upgrade / Connection 头 |
+| `/healthz` | HTTP 健康状态和当前房间数 |
+| `cardgame-web` | PM2 应用名 |
+
+WebSocket 配置采用 [Nginx 官方说明](https://nginx.org/en/docs/http/websocket.html) 与 [Socket.IO 官方反代说明](https://socket.io/docs/v4/reverse-proxy/)，反代读取超时 75 秒大于默认心跳窗口。运行检查：
+
+```text
+ssh cardgame 'pm2 status; systemctl is-enabled pm2-root; curl -fsS http://127.0.0.1:3000/healthz'
+ssh cardgame 'pm2 logs cardgame-web --lines 50 --nostream'
+```
+
+公网测试入口为 [http://47.76.64.154/](http://47.76.64.154/)，只需 80 端口。当前不配置域名与 HTTPS。此发布是完整基础流程的可玩测试实例；正式卡包、E 系列拓展牌和 U06 仍保持未开放状态。
