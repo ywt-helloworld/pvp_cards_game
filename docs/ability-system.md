@@ -1,6 +1,6 @@
 # 卡牌技能设计
 
-本文说明卡牌技能的设计，以及使用 C++17 抽象基类 `Handle_event` 实现这些设计。`Handle_event` 作为事件处理器，统一通过 `handle_event(Context&)` 接收事件，读取参数、判断条件并执行对应效果。功能牌的持有者、实例、技能容器与牌级状态见 [功能卡说明](function-cards.md)。本文为接口草案，尚未实现对局引擎。
+本文说明卡牌技能的设计，以及使用 C++17 抽象基类 `Handle_Event` 实现这些设计。`Handle_Event` 作为事件处理器，统一通过 `handle_event(const Context&)` 读取上下文，返回一个新 `Event` 或空值，由状态机 `Condition` 继续处理。功能牌的持有者、实例、技能容器与牌级状态见 [功能卡说明](function-cards.md)。`Event`、`Condition` 与 `Context` 的定义见 [事件与状态机说明](event-system.md)。本文为接口草案，尚未实现对局引擎。
 
 ## 1. 时机与行为主体分别记录
 
@@ -19,7 +19,7 @@
 
 同一次出牌只发布一次 `PlayCommitted`，不能再发布“任意玩家出牌后”“自己出牌后”“其他玩家出牌后”三个事件。主体范围由每个技能相对自己的持有者判断；主体范围也不是技能的效果目标。
 
-`Context.actor` 表示发起当前行为的玩家，`Context.owner` 表示正在检查的技能持有者；效果目标由对应事件参数记录，三者允许不同。局开始、局结束等全局事件可以没有 `actor`，此时不按 `Self/Others` 匹配，使用 `Any` 并根据事件中的赢家等字段判断。
+`Context.event.actor` 表示发起当前行为的玩家，`Context.owner` 表示正在检查的技能持有者；效果目标由对应事件参数记录，三者允许不同。局开始、局结束等全局事件可以没有 `actor`，此时不按 `Self/Others` 匹配，使用 `Any` 并根据事件中的赢家等字段判断。
 
 ## 2. 第一版时机表
 
@@ -96,12 +96,12 @@ TurnStart → PlayActionWindow
 
 派发时冻结候选列表，轮到每个技能时重新检查状态和条件。结算中新增的技能从后续事件开始参与；已被禁用、废除或移除的候选跳过。物理删除延迟到当前结算安全点，避免正在调用的对象被销毁。
 
-`Context.eventId` 标识一次真实事件，网络重试不生成新事件。每个技能对同一事件默认至多执行一次；派生事件携带来源链，默认不得重新进入链中尚未完成的同一技能。复制和重复结算若开放，必须另外规定可复制范围、次数上限和是否产生新事件，不通过递归再次发布原始出牌来实现。
+`Context.event.eventId` 标识一次真实事件，网络重试不生成新事件。每个技能对同一事件默认至多执行一次；派生事件携带来源链，默认不得重新进入链中尚未完成的同一技能。复制和重复结算若开放，必须另外规定可复制范围、次数上限和是否产生新事件，不通过递归再次发布原始出牌来实现。
 
 ## 4. 主动、被动和状态
 
-- 主动技能：玩家在允许窗口发起请求，由服务端封装为 `Context.source = Active`，同时填写目标功能卡与技能标识；只派发给被选中的技能。未主动请求不执行；超时默认放弃可选主动技能。
-- 被动技能：事件发生或规则被查询时，由系统提供 `Context.source = Passive`，按既定顺序派发给对应处理器。触发后选择目标仍属于被动技能，不因此改成主动技。
+- 主动技能：玩家在允许窗口发起请求，由服务端封装为主动 `Event`（`source = Active`），同时填写目标功能卡与技能标识；只派发给被选中的技能。未主动请求不执行；超时默认放弃可选主动技能。
+- 被动技能：事件发生或规则被查询时，由系统提供被动 `Event`（`source = Passive`），按既定顺序派发给对应处理器。触发后选择目标仍属于被动技能，不因此改成主动技。
 - 同一牌可有多个技能，主动发动只调用所选技能，不把该牌的其他主动技能一起执行；被动事件只遍历被动技能。
 
 | 字段 | 本轮接口约定 |
@@ -112,97 +112,20 @@ TurnStart → PlayActionWindow
 | `type` | `Active` 或 `Passive` |
 | `scope` | 响应自己的、他人的或任意主体的行为 |
 
-外部统一调用 `handle_event(context)`。派发方负责核对持有关系、牌级状态和请求目标，处理器读取上下文并检查自己的 `available/usable`、`source` 与 `type`、时机掩码、主体范围、目标、费用、次数及具体条件；全部满足后执行本次事件的处理逻辑。`usable == true` 不表示可以忽略时机直接发动。
+`Condition` 统一调用 `handle_event(context)`。状态机核对持有关系、牌级状态和请求目标，处理器读取上下文并检查自己的 `available/usable`、事件 `source` 与自身 `type`、时机掩码、主体范围、目标、费用、次数及具体条件；满足后返回效果事件，由 `Condition` 校验并执行。`usable == true` 不表示可以忽略时机直接发动。
 
 次数上限、已使用次数、重置范围、消耗策略和持续期限在逐张设计时明确；布尔值不能表达这些数值与生命周期。临时效果结束时撤销对应修正，不自动退款或回滚已经发放的收益。
 
 ## 5. C++17 接口草案
 
 ```cpp
-#include <cstddef>
-#include <cstdint>
 #include <optional>
 #include <vector>
 
-enum class Players : std::uint8_t { P1, P2, P3, P4 };
-enum class AbilityType : std::uint8_t { Active, Passive };
-enum class PlayerScope : std::uint8_t { Self, Others, Any };
-
-enum class Timing : std::size_t {
-    GameStart = 0,
-    ShopEnter = 1,
-    ShopActionWindow = 2,
-    ShopRefreshQuote = 3,
-    ShopRefreshAfter = 4,
-    ShopBuyQuote = 5,
-    ShopBuyAfter = 6,
-    ShopSellQuote = 7,
-    ShopSellAfter = 8,
-    ShopLeave = 9,
-    RoundStart = 10,
-    InitialDealBefore = 11,
-    InitialDealAfter = 12,
-    TrickStart = 13,
-    TurnStart = 14,
-    PlayActionWindow = 15,
-    PlayValidate = 16,
-    PlayCommitted = 17,
-    PlayRewardBefore = 18,
-    PlayRewardAfter = 19,
-    PassCommitted = 20,
-    TurnEnd = 21,
-    TrickEnd = 22,
-    DrawBefore = 23,
-    DrawAfter = 24,
-    TrickDrawsAfter = 25,
-    RoundEnd = 26,
-    RoundRewardBefore = 27,
-    RoundRewardAfter = 28,
-    GameEnd = 29,
-    CardChanged = 30,
-    AbilityResolved = 31,
-    FunctionCardEquipped = 32,
-    FunctionCardRemoved = 33,
-    Count = 34
-};
-
-inline constexpr std::size_t TOTAL_TIMES =
-    static_cast<std::size_t>(Timing::Count);
-
-// 事件参数的最小示例，具体字段随事件设计补充。
-struct RewardData {
-    int score = 0;  // 本次待结算分数
-    int coins = 0;  // 本次待结算金币
-};
-
-struct ShopData {
-    int baseCost = 0;   // 本次操作的基础费用
-    int finalCost = 0;  // 修正后的待支付费用
-};
-
-class GameState;  // 游戏状态与受控操作接口，后续定义
-
-struct Context {
-    GameState& game;
-    Timing timing;
-    Players owner;  // 本次正在处理的技能所属玩家
-
-    std::optional<Players> actor;  // 行为发起者，全局事件可空
-    AbilityType source = AbilityType::Passive;
-    std::uint64_t eventId = 0;    // 由系统提供真实事件编号
-
-    // 主动请求时指定；被动派发时为空。
-    std::optional<std::size_t> requestedCardSeq;
-    std::optional<std::size_t> requestedAbilityIndex;
-
-    // 仅对应事件提供，不适用的事件参数保持为空。
-    std::optional<RewardData> reward;
-    std::optional<ShopData> shop;
-};
-
-class Handle_event {
+// 依赖事件与状态机说明中的 Context、Event 及公共枚举。
+class Handle_Event {
 public:
-    virtual ~Handle_event() = default;
+    virtual ~Handle_Event() = default;
 
     bool available = true;
     bool usable = true;
@@ -210,83 +133,79 @@ public:
     PlayerScope scope = PlayerScope::Any;
     std::vector<bool> time = std::vector<bool>(TOTAL_TIMES, false);
 
-    // 统一事件入口：读取上下文、判断条件并处理事件。
-    // true 表示本处理器成功处理；false 表示本次未处理。
-    virtual bool handle_event(Context& context) = 0;
+    // 读取上下文，返回新事件；无输出时返回 std::nullopt。
+    virtual std::optional<Event> handle_event(const Context& context) = 0;
 };
 ```
 
-`enum class Players` 表示固定座位，2 人或 3 人房间只遍历实际参局座位；枚举存在不表示该座位已加入游戏。枚举 P1 对应固定编号 1，之后按逆时针编号。
+此接口依赖 [事件与状态机说明中的公共定义](event-system.md#5-c17-接口草案)。`Players` 表示固定座位，只遍历实际参局玩家；时机枚举与布尔集合下标仍沿用 §2 的 34 个取值。
 
-技能的公共入口收敛为 `handle_event(Context&)`，原来的 `can_call` 和 `call_ability` 合并到处理器内部。调用方不另外传递 `AbilityArgs`；一次调用所需的事件参数统一由 `Context` 提供。接口使用普通结构体表达已确定的事件数据，当前不要求引入 `std::variant`。
+技能的公共入口为 `handle_event(const Context&)`。处理器通过只读上下文获取所需参数，以 `std::optional<Event>` 表达有无后续事件；效果由 `Condition` 继续执行。基类提供虚析构函数，时机集合初始化为 `TOTAL_TIMES` 个 false。
 
-`handle_event()` 加 `= 0` 定义纯虚函数，由具体处理器实现。基类提供虚析构，以便通过基类指针正确释放派生实例。时机集合初始化为 `TOTAL_TIMES` 个 false，具体技能开启自己响应的位置。
-
-技能由所属功能牌拥有；技能容器、添加、删除、废除及临时禁用的管理规则见 [功能卡说明](function-cards.md#3-技能管理与生命周期)。
+技能由功能牌拥有；技能容器、添加、删除、废除及临时禁用的管理规则见 [功能卡说明](function-cards.md#3-技能管理与生命周期)。
 
 ## 6. Context 与派发流程
 
-`Context` 是一次事件的处理上下文，由服务端根据真实游戏状态和已校验的玩家请求构造，不能直接采用客户端提交的任意数值。
+`Condition` 接收 `Event`，根据当前流程状态校验事件，并为选定处理器生成 `Context`。处理器只读当前事件和业务状态，返回一个后续事件；状态机继续处理该事件链。
 
-| 信息 | 用途 |
+| 上下文信息 | 用途 |
 |---|---|
-| `timing / eventId` | 事件发生的边界及唯一编号 |
-| `owner / actor` | 当前处理器所属玩家与行为发起者 |
-| `source` | 区分主动请求与被动事件派发 |
-| `requestedCardSeq / requestedAbilityIndex` | 主动请求的目标；被动派发时为空 |
-| `reward / shop` | 对应事件提供的具名参数，例如待结算奖励或刷新报价 |
-| `game` | 读取游戏状态，通过受控操作执行非当前参数内的效果 |
-
-`RewardData`、`ShopData` 仅是最小示例。具体卡牌需要出牌内容、赖子方案、目标、行为原因等信息时，按事件扩充具名结构；处理器在访问参数前检查该事件是否提供了它。固定效果数值仍可保存在技能实例中，动态数值从上下文读取。
+| `event.timing / event.eventId` | 原通知的时机及唯一编号 |
+| `owner / event.actor` | 当前处理器所属玩家与行为发起者 |
+| `event.source` | 区分主动请求与被动通知 |
+| `event.requestedCardSeq / event.requestedAbilityIndex` | 主动请求目标；被动通知为空 |
+| `reward / shop` | 状态机生成的当前待结算奖励或报价快照 |
+| `game` | 只读业务状态视图，具体查询接口后续定义 |
 
 ```text
-真实事件 / 玩家主动请求
-  → 服务端校验并构造 Context
-  → 选择功能卡，调用 FunctionCards::handle_event(context)
-  → 按规则选择其技能，调用 Handle_event::handle_event(context)
-  → 技能读取当前事件参数，判断条件，处理对应效果
-  → 返回是否处理，系统记录次数、消耗与派生事件
+Event → Condition → Context → Handle_Event::handle_event(context)
+                                  ↓
+                         新 Event / std::nullopt
+                                  ↓
+                         Condition 继续调度
 ```
 
-派发到某张牌前，由系统将 `owner` 设为该牌持有者，`actor`、`source`、`eventId` 和主动请求目标保持原事件含义。同一次结算使用同一份待结算事件数据，前序技能对报价或奖励的合法修改供后续技能继续读取；不能为每个处理器复制互不相通的结果。
+每次生成上下文时使用最新的待结算数据；返回事件由 `Condition` 执行后，再继续下一个处理器。原始事件保持不变，处理器不直接修改游戏资源、快照或事件，也不自行递归派发。
 
-处理器只保留自身的成长、次数等状态，不长期保存传入的 `Context` 引用。后续事件由调度器在当前处理返回后的安全点派发，避免直接递归修改仍在处理的上下文。
-
-返回 true 表示本处理器成功处理，false 表示未处理；多个处理器的结果逐个汇总，不通过短路跳过后续处理器。一次事件可以被多张牌处理，true 不自动表示停止传播。报价与合法性查询即使返回 true，也不扣次数、不消耗、不发放实际奖励，仍遵守 §2 的无持久副作用规则。
+空值表示没有后续事件，状态机继续其他候选；新事件表示请求执行后续处理，实际成功后再记录成功次数和处理消耗。报价预览、事件来源、队列与循环边界见 [事件与状态机说明](event-system.md#4-队列返回值与结算)。
 
 ## 7. 事件处理示例
 
-下面是接口用法示意，不代表已确定的正式功能卡：“自己的出牌奖励计算前，将本手待结算分数翻倍”。技能从 `Context.reward` 读取数值，并将修正结果写回当前结算。
+以下仅为接口示意，不代表正式卡牌：“自己的出牌奖励计算前，将本手待结算分数翻倍”。处理器读取上下文，并返回 `MultiplyPendingScore` 效果事件。
 
 ```cpp
-class DoubleScoreHandler final : public Handle_event {
+class DoubleScoreHandler final : public Handle_Event {
 public:
     DoubleScoreHandler() {
         scope = PlayerScope::Self;
         time[static_cast<std::size_t>(Timing::PlayRewardBefore)] = true;
     }
 
-    bool handle_event(Context& context) override {
-        if (!available || !usable || context.source != type) {
-            return false;
+    std::optional<Event> handle_event(const Context& context) override {
+        if (!available || !usable || context.event.source != type) {
+            return std::nullopt;
         }
 
-        const auto index = static_cast<std::size_t>(context.timing);
+        const auto index = static_cast<std::size_t>(context.event.timing);
         if (index >= time.size() || !time[index]) {
-            return false;
+            return std::nullopt;
         }
 
-        if (!context.actor || *context.actor != context.owner ||
-            !context.reward) {
-            return false;
+        if (!context.event.actor ||
+            *context.event.actor != context.owner || !context.reward) {
+            return std::nullopt;
         }
 
-        context.reward->score *= 2;
-        return true;
+        Event next;
+        next.kind = EventKind::Effect;
+        next.effect = EffectData{
+            EffectType::MultiplyPendingScore, context.owner, 2
+        };
+        return next;
     }
 };
 ```
 
-这里修改的是当前待结算分数，实际到账仍由奖励阶段完成；其他处理器可以继续读取修正后的值。固定效果、动态参数和事件选择都由同一 `handle_event` 入口处理。
+`Condition` 校验并执行返回事件，修改当前待结算分数；实际到账仍由奖励阶段完成。处理器返回的事件 ID 与来源由状态机统一补齐，不能把它当作一次新的实际出牌。
 
-实际调度、稳定技能 ID、次数与费用管理、交互挂起和事务处理待引擎实现时补齐。
+具体状态转移、事件队列、派发游标、成功计次、受控业务操作、交互挂起和事务处理待引擎实现时补齐。
