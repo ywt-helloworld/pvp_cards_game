@@ -4,6 +4,8 @@
 
 本文为 C++17 接口与架构草案；示例通过语法检查不表示事件循环、业务操作或网络服务已经实现。当前命名统一为 `Event`、`Condition`、`Context`、`Handle_Event`、`FunctionCards`、`Poker` 和 `EventListener`。
 
+事件数据模型已生成在 [include/Event.hpp](include/Event.hpp)，包含 `Event` 抽象基类、四类中间基类、固定时机通知模板及 132 个具体事件，并保留参数与事件注释。头文件只带上事件字段所需的枚举、ID 和轻量引用；其他模块的代码仍留在本文设计草案中。包含此头文件即可使用事件类型，无需链接单独的 `.cpp` 文件。
+
 ## 目录
 
 - [1. 总体架构](#1-总体架构)
@@ -308,7 +310,7 @@ struct EventMeta {
     EventId eventId = 0;
     std::optional<EventId> parentEventId;
     EventId rootEventId = 0;
-    std::optional<Players> actor;
+    std::optional<Players> actor;  // 行为发起者；全局事件可以为空
     std::optional<AbilityRef> originAbility;
     std::uint64_t stateVersion = 0;
     EventOrigin origin = EventOrigin::Server;
