@@ -2,9 +2,9 @@
 
 所有代码设计统一维护在根目录 `design.md`，后续的类定义、接口、事件协议、状态机、调度与联机实现说明都更新在此。游戏规则见 [README.md](README.md)，卡牌参考资料见 [设计调研](docs/function-card-research.md)。
 
-当前已实现 C++17 事件数据模型和 ListenEvent 回调监听适配器；其余接口与架构仍为设计草案，事件循环、游戏业务与网络协议尚未接入。当前命名统一为 `Event`、`Condition`、`Context`、`Handle_Event`、`FunctionCards`、`Poker` 和 `ListenEvent`。
+当前已实现 C++17 事件数据模型、ListenEvent 回调适配器，以及 Context 数据保存与 Condition 的事件转换入口；游戏阶段调度、技能执行、业务操作和网络协议仍待接入。当前命名统一为 `Event`、`Condition`、`Context`、`Handle_Event`、`FunctionCards`、`Poker` 和 `ListenEvent`。
 
-事件数据模型已生成在 [include/Event.hpp](include/Event.hpp)，包含 `Event` 抽象基类和 132 个直接派生的具体事件，并保留参数与事件注释。头文件只带上事件字段所需的枚举、ID 和轻量引用；其他模块的代码仍留在本文设计草案中。包含此头文件即可使用事件类型，无需链接单独的 `.cpp` 文件。
+事件数据模型已生成在 [include/Event.hpp](include/Event.hpp)，包含 `Event` 抽象基类和 132 个直接派生的具体事件，并保留参数与事件注释。公共枚举与别名由 Common 提供；Context、Condition 和 ListenEvent 的实际接口见下面的文件表，其余模块仍为设计草案。包含此头文件即可使用事件类型，无需链接单独的 `.cpp` 文件。
 
 实现文件按下列目录组织：
 
@@ -13,6 +13,10 @@
 | [include/Common/enums.hpp](include/Common/enums.hpp) | cardgame：公共枚举和事件类型总数 |
 | [include/Common/types.hpp](include/Common/types.hpp) | cardgame：ID、数值、EventPtr、EventReceiver 和 EventDisconnect 别名 |
 | [include/Event.hpp](include/Event.hpp) | cardgame：事件参数与 132 个具体事件 |
+| [include/Context.hpp](include/Context.hpp) | cardgame：完整事件、外部调度记录及可选调用快照 |
+| [include/Condition.hpp](include/Condition.hpp) | cardgame：事件到共享 Context 的更新接口 |
+| [src/Condition.cpp](src/Condition.cpp) | cardgame：132 种根事件结构校验与上下文更新 |
+| [tests/ContextCondition.test.cpp](tests/ContextCondition.test.cpp) | 完整参数、快照、异常保持、隔离与监听接入测试 |
 | [include/network/ListenEvent.hpp](include/network/ListenEvent.hpp) | cardgame::network：监听器接口与通用回调转换 |
 | [src/network/ListenEvent.cpp](src/network/ListenEvent.cpp) | cardgame::network：132 种类型工厂、订阅管理和停止逻辑 |
 | [tests/ListenEvent.test.cpp](tests/ListenEvent.test.cpp) | 监听契约、参数传递、并发来源和生命周期验证 |
@@ -50,7 +54,7 @@
 
 ## 2. 事件与状态机
 
-本轮统一采用用户最新命名：事件类 `Event`、状态机类 `Condition`、技能事件处理器类 `Handle_Event`。本文定义接口与责任，具体对局引擎尚未实现。
+当前命名为事件类 `Event`、上下文 `Context`、转换与调度入口 `Condition`、技能处理器 `Handle_Event`。Condition 已实现接收事件并生成或修改 Context；以下阶段、队列和技能结算描述保留为后续调度目标。
 
 ### 2.1 调用关系
 
@@ -69,7 +73,7 @@ Event
 |---|---|
 | `Event` | 只记录操作或通知标识、发起玩家与必要参数 |
 | `Condition` | 保存流程阶段、接收与校验事件、生成上下文、调度处理器、执行效果、推进流程 |
-| `Context` | 为一次处理提供事件、处理器持有者和当前业务状态的只读视图 |
+| `Context` | 保存完整当前事件、外部调度信息和处理快照，提供类型化只读访问 |
 | `Handle_Event` | 读取上下文并判断条件，返回一个后续事件 |
 | `FunctionCards` | 保存牌级状态并拥有处理器，提供添加、删除和废除操作 |
 | `GameState` | 保存手牌、分数、金币和当前待结算数据等业务状态 |
@@ -91,15 +95,15 @@ Event
 
 每个房间的 Condition 只创建一份 `Context` 并反复更新；单房间运行时总共只有一份。它是该房间全局共享的调用现场，通过 `Condition::context()` 提供只读访问，不使用跨房间的进程级可变全局对象。
 
-Condition 在调用每个处理器之前，直接更新上下文的当前事件、接收技能、待结算奖励与报价快照。处理器只能接收 `const Context&`，不能改业务状态；前一个处理器返回的效果执行后，再刷新同一个 Context 给下一个处理器。
+Condition 接收 EventPtr 后持有完整派生对象，所有专属字段、列表、可选值和 EventBatch 子事件均保留，调用方通过 event_as<T>() 读取。通用 type() 与 actor() 直接读取当前事件，避免维护重复副本。奖励和报价快照按对应事件字段复制，后续可由 set_reward / set_shop 修改工作快照，原始事件保持原值。
 
-Context 的对象生命周期属于 Condition，内容绑定只在当前一次处理器调用期间有效。处理器返回后清理绑定；等待选择时保存事件、交互 ID 与结算进度，恢复时重新填充上下文，不保存旧 Context 引用。父事件在子链完成后重新绑定，避免玩家、事件和目标串用。
+Context 的对象生命周期属于 Condition；on_event 和 clear_context 始终更新同一对象，其他模块读取 const Context&。事件和调度记录保存到下一次事件替换或显式清空；调用快照与接收技能指针还可能因对应 set 方法而失效。新事件会清空旧接收技能与无关快照，等待、父子链和恢复操作由后续调度模块管理。
 
 主动请求使用 `ActivateAbilityRequest`，服务端验证后根据窗口生成 `ShopAbilityActivationEvent` 或 `TurnAbilityActivationEvent`，只调用选定技能。效果完成后产生的新业务通知按业务规则匹配技能，来源技能仅以引用记录在外部调度信息中；Condition 查询技能自身的定义来判断是否为主动技能。
 
 ### 2.3 状态与转移
 
-下表规定流程骨架，所有转移在对应事件及其后续效果完成后进行；`Condition` 仍需检查真实游戏状态，不能仅凭一个事件名称跳转。
+下表规定后续对局状态机的流程骨架，转移需在对应业务及效果完成后进行。当前 Condition 只校验根事件的编号与实际派生类型并更新 Context，完整阶段转移尚未接入。
 
 | 当前阶段 | 边界与条件 | 下一阶段 |
 |---|---|---|
@@ -116,7 +120,7 @@ Context 的对象生命周期属于 Condition，内容绑定只在当前一次�
 
 ### 2.4 队列、返回值与结算
 
-`Condition::on_event(EventPtr, DispatchMeta)` 是统一接收入口，按事件来源与当前状态采用以下接收方式：
+`Condition::on_event(EventPtr, DispatchMeta)` 已实现为统一的上下文更新入口，可省略调度记录。下面的排队、门禁和链式结算是后续对局调度需要接入的规则：
 
 | 输入 | 接收方式 |
 |---|---|
@@ -144,7 +148,7 @@ Context 的对象生命周期属于 Condition，内容绑定只在当前一次�
 
 ### 2.5 C++17 接口草案
 
-本节汇总展示公共枚举、事件参数、上下文和状态机的设计；已实现的枚举与别名以 Common 中的文件为准，事件参数以 Event.hpp 为准。下列草案均位于 cardgame 命名空间；技能和功能卡接口在后续章节引用它们。
+本节汇总展示公共类型以及已实现的 Context、Condition 接口，均位于 cardgame 命名空间；源文件以 Common、Event.hpp、Context.hpp、Condition.hpp 和 src/Condition.cpp 为准。技能与完整调度接口仍在后续章节设计。
 
 ```cpp
 #include <cstddef>
@@ -153,6 +157,7 @@ Context 的对象生命周期属于 Condition，内容绑定只在当前一次�
 #include <memory>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -402,107 +407,185 @@ inline Event::~Event() = default;
 
 using EventPtr = std::unique_ptr<Event>;
 
-class GameState;  // 视为已有业务模型，不在本次重新实现
+// EventOrigin 和 ExecutionMode 实际定义在 Common/enums.hpp。
+enum class EventOrigin : std::uint8_t { Server, Client, Timer, Connection };
+enum class ExecutionMode : std::uint8_t { Commit, Preview };
+
+/// 由输入入口和调度模块填写的记录，独立于事件的操作参数。
+struct DispatchMeta {
+    RoomId roomId = 0;  // 所属房间。
+    RequestId requestId = 0;  // 外部请求编号，供调用方去重或关联反馈。
+    std::uint64_t expectedVersion = 0;  // 请求基于的状态版本。
+    EventId eventId = 0;  // 本次实际事件的编号。
+    std::optional<EventId> parentEventId;  // 引发当前事件的直接父事件。
+    EventId rootEventId = 0;  // 本次操作链的根事件。
+    std::optional<AbilityRef> originAbility;  // 产生事件的来源技能，区别于接收技能。
+    std::uint64_t stateVersion = 0;  // 接收或提交时记录的权威状态版本。
+    EventOrigin origin = EventOrigin::Server;  // 来源分类由可信入口填写。
+    ExecutionMode mode = ExecutionMode::Commit;  // 实际提交或只读预览。
+};
+
 class Condition;
 
-class Context {
-public:
+/// 每个 Condition 复用一份通用上下文，持有完整的当前派生事件。
+/// 事件专属字段通过 event_as<T>() 读取，包含列表、可选值和 EventBatch 子事件。
+/// 外部读取 const Context&，修改统一通过 Condition；数据有效期至下次替换或清空。
+struct Context {
+    Context() = default;
     Context(const Context&) = delete;
     Context& operator=(const Context&) = delete;
+    Context(Context&&) = delete;
+    Context& operator=(Context&&) = delete;
 
-    const GameState& game() const noexcept { return game_; }
-    const Event* event() const noexcept { return event_; }
-    std::optional<Players> owner() const noexcept {
-        if (!receiver_) return std::nullopt;
-        return receiver_->card.owner;
+    /// 是否已保存一个事件。
+    bool has_event() const noexcept { return static_cast<bool>(event_); }
+
+    /// 完整事件对象；空上下文返回 nullptr。
+    const Event* event() const noexcept { return event_.get(); }
+
+    /// 当前操作类型；空上下文返回 nullopt。
+    std::optional<EventType> type() const noexcept {
+        return event_ ? std::optional<EventType>(event_->type) : std::nullopt;
     }
+
+    /// 事件发起者，区别于效果目标和当前接收技能的持有者。
+    std::optional<Players> actor() const noexcept {
+        return event_ ? event_->actor : std::nullopt;
+    }
+
+    /// 取得完整的具体参数；类型不匹配或为空时返回 nullptr。
+    template<class EventT>
+    const EventT* event_as() const noexcept {
+        static_assert(std::is_base_of_v<Event, EventT>,
+                      "EventT must derive from Event");
+        return dynamic_cast<const EventT*>(event_.get());
+    }
+
+    /// 当前事件的外部调度记录；空上下文返回 nullptr。
+    const DispatchMeta* metadata() const noexcept {
+        return event_ ? &metadata_ : nullptr;
+    }
+
+    /// 当前接收技能；由调度方显式绑定，不根据事件中的目标技能猜测。
     const AbilityRef* receiver() const noexcept {
         return receiver_ ? &*receiver_ : nullptr;
     }
+
+    /// 当前接收技能所属玩家；没有绑定接收技能时为空。
+    std::optional<Players> owner() const noexcept {
+        return receiver_ ? std::optional<Players>(receiver_->card.owner)
+                         : std::nullopt;
+    }
+
+    /// 奖励处理快照；原始事件的字段仍在 event_as<T>() 中完整保留。
     const RewardData* reward() const noexcept {
         return reward_ ? &*reward_ : nullptr;
     }
+
+    /// 商店报价处理快照；不存在相关数据时为空。
     const ShopData* shop() const noexcept {
         return shop_ ? &*shop_ : nullptr;
     }
 
-    template<class T>
-    const T* event_as() const noexcept {
-        return dynamic_cast<const T*>(event_);
-    }
-
 private:
     friend class Condition;
-    explicit Context(const GameState& game) : game_(game) {}
 
-    const GameState& game_;
-    const Event* event_ = nullptr;
+    EventPtr event_;  // 拥有整个派生对象，避免对象切片、借用悬空或遗漏字段。
+    DispatchMeta metadata_;
     std::optional<AbilityRef> receiver_;
     std::optional<RewardData> reward_;
     std::optional<ShopData> shop_;
 };
 
-// 调度模块的数据，独立于 Event；由可信入口和 Condition 管理。
-enum class EventOrigin : std::uint8_t { Server, Client, Timer, Connection };
-enum class ExecutionMode : std::uint8_t { Commit, Preview };
-
-struct DispatchMeta {
-    RoomId roomId = 0;
-    RequestId requestId = 0;
-    std::uint64_t expectedVersion = 0;
-    EventId eventId = 0;
-    std::optional<EventId> parentEventId;
-    EventId rootEventId = 0;
-    std::optional<AbilityRef> originAbility;
-    std::uint64_t stateVersion = 0;
-    EventOrigin origin = EventOrigin::Server;
-    ExecutionMode mode = ExecutionMode::Commit;
-};
-
-struct ResolutionFrame {
-    EventPtr event;
-    DispatchMeta meta;  // 记录本帧的请求、来源链和版本
-    std::vector<AbilityRef> candidates;  // 本通知冻结后的有序候选
-    std::size_t nextHandler = 0;
-};
-
+/// 事件到上下文的转换入口；同一房间应由串行执行器调用。
+/// 结构检查与快照提取完成后才替换旧上下文；业务权限和操作执行由业务层接入。
 class Condition {
 public:
-    explicit Condition(GameState& game) : game_(game), context_(game) {}
+    Condition() = default;
+    Condition(const Condition&) = delete;
+    Condition& operator=(const Condition&) = delete;
+    Condition(Condition&&) = delete;
+    Condition& operator=(Condition&&) = delete;
 
-    // 商店普通请求排队；局内合法操作直接启动结算。
-    // 控制或授权选择单独校验；内部效果属于当前结算链。
-    void on_event(EventPtr event, DispatchMeta meta);
-    GamePhase phase() const { return phase_; }
+    /// 接管事件，保留全部专属参数，重置上一事件的接收技能和可选快照。
+    /// 空指针、未知 EventType 或编号与具体类不符时抛 invalid_argument，
+    /// 并保留原上下文。返回值始终引用本实例的同一个 Context。
+    const Context& on_event(EventPtr event, DispatchMeta meta = {});
+
+    /// 获取共享上下文的只读视图。
     const Context& context() const noexcept { return context_; }
 
-private:
-    bool can_accept(const Event& event, const DispatchMeta& meta) const;
-    void resolve(EventPtr event, DispatchMeta meta);
-    bool process_event(const Event& event, const DispatchMeta& meta);
-    void bind_context(const Event& event, const AbilityRef& receiver);
-    void clear_context() noexcept;
-    void dispatch_next_handler();
-    void finish_event(const Event& event);
+    /// 修改当前调用绑定或计算快照；清除时传 nullopt。
+    /// 没有当前事件时抛 logic_error。
+    void set_receiver(std::optional<AbilityRef> receiver);
+    void set_reward(std::optional<RewardData> reward);
+    void set_shop(std::optional<ShopData> shop);
 
-    GameState& game_;
-    Context context_;  // 每个房间仅此一份，Condition 直接更新
-    GamePhase phase_ = GamePhase::NotStarted;
-    std::deque<ResolutionFrame> shopEvents_;  // 商店待处理事件及外部调度记录
-    std::vector<ResolutionFrame> resolutionStack_;
-    bool processing_ = false;
+    /// 释放当前事件并清空全部关联数据，Context 本身的地址保持不变。
+    void clear_context() noexcept;
+
+private:
+    void require_event() const;
+
+    Context context_;  // 每个房间复用的唯一一份上下文。
 };
 
 }  // namespace cardgame
 ```
 
-`Condition::on_event(EventPtr, DispatchMeta)` 接管所有类别事件的所有权。`resolve` 推进当前结算栈；`process_event` 通过事件 `type` 确定操作，结合独立的 DispatchMeta 校验来源、状态与具体参数，再调用相应业务操作；`finish_event` 完成当前帧并按规则推进流程。Event 本身只保存操作标识和参数；DispatchMeta、队列、结算帧及操作处理表由外部模块管理。具体业务对象视为已有，只约定接入接口，不在本次实现它们。
+`Condition::on_event` 先检查非空指针，再按 type 核对 132 种根事件的具体派生类，提取可选快照，最后把事件及 DispatchMeta 移交给同一份 Context，并返回 const Context&。空事件、未知类型和编号与实际类不符都会抛出 invalid_argument，原上下文保持不变；检查失败的传入事件仍由函数参数的唯一所有权正常释放。业务参数、权限和阶段合法性由后续业务层判断。
 
-`bind_context` 由 Condition 直接更新唯一 Context 的私有字段，填入当前帧的 Event 指针、接收技能与最新待结算快照；`clear_context` 在处理器返回后清空事件、接收者和可选参数。Context 禁止复制，其他模块通过只读访问器读取，不能把调用现场保存为以后使用的状态。
+set_receiver、set_reward 和 set_shop 只修改本次调用的可选绑定或工作快照，传 nullopt 可清除；空上下文调用这些方法会抛出 logic_error。clear_context 释放当前事件并清空所有关联信息，Context 本身的地址保持不变。接收技能需要调度方显式绑定，区别于事件发起者、效果目标和 DispatchMeta 中的来源技能。
 
-Event 由队列或结算帧中的 `unique_ptr` 拥有，即使容器移动，其派生对象地址也保持稳定。释放或弹出事件帧前必须先清理上下文绑定。所有返回事件按值保存 ID、目标和参数，不能包含指向当前 Context 的指针或引用。
+进入 Context 前，事件由来源模块或队列拥有；on_event 通过 unique_ptr 接管同一个完整对象，保持其地址及专属字段，避免对象切片或额外复制。替换或清空后不得继续使用旧事件指针。EventBatch 的子对象随父事件保存和释放；其子项的业务规则校验留给组合效果处理模块。
 
-`Event` 是抽象基类，不能使用 `EventPtr` 之外的旧式 `optional<Event>` 或 `deque<Event>` 按值承载派生对象；返回空指针表示没有输出。Event 的虚析构保证基类指针正确销毁派生对象。`processing_` 只表示调度循环正在运行，不能代替操作窗口和挂起交互检查。
+`Event` 是抽象基类，使用 EventPtr 交接唯一所有权。当前 Context 和 Condition 均禁止复制或移动，以保持共享上下文地址稳定；同一房间由串行执行器调用。玩家、手牌、商店、奖励计算和阶段状态仍由既有业务模块负责。
+
+当前自动提取的公共快照如下；其他字段始终保留在具体事件中，不会因未列在表中而丢失。快照按原值复制，不在此阶段重新计算奖励或修正结算编号。
+
+| 事件 | 公共快照来源 |
+|---|---|
+| BeforePlayRewardEvent、BeforeRoundRewardEvent | initialReward → reward() |
+| PlayRewardGrantedEvent | reward → reward() |
+| BeforeShopRefreshEvent、BeforeShopPurchaseEvent、BeforeShopSaleEvent | initialQuote → shop() |
+| ShopQuoteReadyControl | quote → shop() |
+
+下面是可独立编译的使用示例：
+
+```cpp
+#include "Condition.hpp"
+#include "network/ListenEvent.hpp"
+
+namespace cardgame::examples {
+
+void update_context_example() {
+    Condition condition;
+    network::ListenEvent listener([&condition](EventPtr event) {
+        condition.on_event(std::move(event));
+    });
+
+    auto event = std::make_unique<BeforePlayRewardEvent>();
+    event->actor = Players::P1;
+    event->initialReward = {7, 100, 3};
+    const Context& context = condition.on_event(std::move(event));
+    condition.set_receiver(AbilityRef{{Players::P1, 10}, 1});
+    condition.set_reward(RewardData{7, 200, 3});
+
+    const auto* original = context.event_as<BeforePlayRewardEvent>();
+    const auto* working = context.reward();
+    (void)original;  // 原始事件中的分数仍为 100，所有专属参数完整保留。
+    (void)working;   // 工作快照中的分数为 200。
+}
+
+}  // namespace cardgame::examples
+```
+
+测试见 [tests/ContextCondition.test.cpp](tests/ContextCondition.test.cpp)，验证全部 132 种事件接入、嵌套参数、工作快照、异常保持、房间隔离与 ListenEvent 接线。可在仓库根目录运行：
+
+```text
+g++ -std=c++17 -Wall -Wextra -Werror -pedantic -pthread -Iinclude src/Condition.cpp src/network/ListenEvent.cpp tests/ContextCondition.test.cpp -o ContextCondition.test.exe
+./ContextCondition.test.exe
+```
 
 ### 2.6 示例链
 
@@ -1981,7 +2064,7 @@ TurnStart → PlayActionWindow
 
 派发时冻结候选列表，轮到每个技能时重新检查状态和条件。结算中新增的技能从后续事件开始参与；已被禁用、废除或移除的候选跳过。物理删除延迟到当前结算安全点，避免正在调用的对象被销毁。
 
-Condition 结算帧中的 `DispatchMeta.eventId` 标识一次真实事件，网络重试不生成新事件。每个技能对同一事件默认至多执行一次；派生事件携带来源链，默认不得重新进入链中尚未完成的同一技能。复制和重复结算若开放，必须另外规定可复制范围、次数上限和是否产生新事件，不通过递归再次发布原始出牌来实现。
+外部调度记录中的 `DispatchMeta.eventId` 标识一次真实事件，网络重试不生成新事件。每个技能对同一事件默认至多执行一次；派生事件携带来源链，默认不得重新进入链中尚未完成的同一技能。复制和重复结算若开放，必须另外规定可复制范围、次数上限和是否产生新事件，不通过递归再次发布原始出牌来实现。
 
 ### 3.4 主动、被动和状态
 
@@ -2039,20 +2122,21 @@ public:
 | 只读接口 | 信息 |
 |---|---|
 | `event()` | 当前事件基类指针，可读取 type、actor 和具体操作参数 |
-| `event_as<T>()` | 取得对应具体派生类及其专属参数；不匹配或未绑定时为空 |
+| `event_as<T>()` | 取得完整具体事件；类型不符或为空时返回 nullptr |
+| `has_event() / type() / actor()` | 当前是否有事件、操作类型和发起玩家 |
+| `metadata()` | 本次事件的 DispatchMeta；空上下文返回 nullptr |
 | `owner() / receiver()` | 当前处理器所属玩家和稳定技能引用 |
 | `reward() / shop()` | 当前待结算奖励或报价快照；不适用时为空 |
-| `game()` | 已有 GameState 的只读查询接口 |
+业务 GameState 由调用方或后续业务处理器查询；当前 Context 专注保存事件传来的数据与本次处理快照。
 
 ```text
-当前事件帧
-  → Condition 清理旧绑定，更新同一份 Context
-  → Handle_Event 读取 Context，返回 EventPtr 或 nullptr
-  → 清理 Context 绑定，再执行新事件或恢复父帧
-  → 下一处理器调用前按最新状态重新填充
+ListenEvent 交付 EventPtr
+  → Condition 校验根事件结构并更新同一份 Context
+  → 调用方读取 Context，或绑定接收技能、调整奖励与报价快照
+  → 后续技能调度模块读取 const Context& 并处理返回事件
 ```
 
-父子事件和不同玩家之间复用同一对象，不代表共用旧参数。Condition 每次完整填充接收者、事件、奖励和报价，没有的参数必须清空。等待选择时只保存事件、交互和结算进度，恢复时重新绑定；处理器不得异步持有 Context 引用。
+新事件替换后旧快照与接收者不会残留。同一事件下调用多个处理器时，可用 set_receiver 切换或清除接收技能；只有明确结束当前事件时才 clear_context。上下文保存的完整参数还可在后续读取，但异步任务不能依赖可能被替换的数据指针。父子链、等待选择和恢复处理仍由后续调度层实现。
 
 ### 3.7 事件处理示例
 
@@ -2314,7 +2398,7 @@ bool bind_play_input(
 }  // namespace cardgame::examples
 ```
 
-接收端通过 EventReceiver 捕获房间执行器或 Condition，结合来源模块维护的 DispatchMeta 转交事件。多个线程可以产生来源回调，接收端必须把同一房间的事件投递到串行执行器；ListenEvent 只同步订阅集合，不自行维护商店队列或执行业务操作。参数映射器若包含可变共享状态，也应由调用方提供同步。
+接收端通过 EventReceiver 捕获房间执行器或 Condition，结合来源模块维护的 DispatchMeta 调用已实现的 Condition::on_event。多个线程可以产生来源回调，接收端必须把同一房间的事件投递到串行执行器；ListenEvent 只同步订阅集合，不自行维护商店队列或执行业务操作。参数映射器若包含可变共享状态，也应由调用方提供同步。
 
 停止时先关闭事件交付，再在互斥锁外取消订阅，允许取消过程重入监听器。来源残留回调通过弱引用和停用标记安全返回；注册失败后的残留回调也会停用。已经进入接收函数的调用可以继续完成，销毁接收对象前应由来源模块或房间执行器等待这些调用结束。
 
@@ -2341,12 +2425,12 @@ g++ -std=c++17 -Wall -Wextra -Werror -pedantic -pthread -Iinclude src/network/Li
 
 - 商店普通请求入队后及时启动或唤醒调度循环；局内合法普通操作直接进入当前结算，忙碌或未获授权的出牌请求不缓存。当前动作的派生事件由循环与结算栈继续处理。
 - 内部技能连锁在服务端内存中结算，再同步最终状态与必要的表现事件；玩家必须选择目标的交互会产生真实等待，应记录为等待状态。
-- 每个 Condition 复用唯一 Context，只绑定当前事件和小型快照；Event 通过 unique_ptr 移交所有权，不复制整个牌局或派生对象。虚调用、类型识别和分配成本在实现后测量，确有需要时再采用对象池。
+- 每个 Condition 复用唯一 Context，持有完整当前事件与小型工作快照；Event 通过 unique_ptr 移交，不复制派生对象。当前结构转换已通过测试，端到端成本仍需对局接入后测量。
 - 事件处理路径避免同步等待磁盘、数据库或外部网络；这些工作通过独立任务完成，并按规则接收结果。
 - 检测事件循环、控制连锁工作量，重点测量复杂牌型判断和具体效果的成本。不同房间可以独立调度，同一房间的共享状态由统一入口修改。
 - 定时器用于明确的超时规则；用固定周期扫描所有状态会额外引入接近一个扫描周期的等待，应优先使用实际业务回调。
 
-在实现后记录输入到达、商店请求入队（如适用）、开始处理、事件链完成和结果发出的时间，分别统计服务端调度等待、商店排队等待、连锁耗时与端到端耗时；关联 `eventId`、`rootEventId`，便于定位慢技能和重复链。当前已验证监听转换与生命周期契约；完整对局引擎尚未接入，仍无端到端延迟数据。
+在实现后记录输入到达、商店请求入队（如适用）、开始处理、事件链完成和结果发出的时间，分别统计服务端调度等待、商店排队等待、连锁耗时与端到端耗时；关联 `eventId`、`rootEventId`，便于定位慢技能和重复链。当前已验证监听转换、Context 完整保存与 Condition 更新契约；完整对局引擎尚未接入，仍无端到端延迟数据。
 
 ## 9. 后续实现事项
 
@@ -2354,7 +2438,7 @@ g++ -std=c++17 -Wall -Wextra -Werror -pedantic -pthread -Iinclude src/network/Li
 |---|---|
 | 既有业务接入 | 玩家、GameState、手牌、牌型判定、商店、随机、交互等视为已有，仅完成事件到既有接口的连接 |
 | 输入协议与来源接入 | 将网络解析、认证会话、计时器和连接模块接入 ListenEvent 的 subscribe / translate 契约；对局合法性由 Condition 判断 |
-| 事件调度 | 商店请求队列、局内请求互斥、当前结算栈、去重、来源链、派发游标、暂停／恢复及循环预算 |
+| 事件调度 | 事件到 Context 的结构转换已完成；后续接入商店请求队列、局内请求互斥、结算栈、去重、来源链、派发游标、暂停／恢复及循环预算 |
 | 事务与成功标准 | 效果执行、费用、计次、消耗、失败处理和结果同步 |
 | 稳定标识与协议 | 复用房间、玩家、牌实例、技能、事件及交互 ID；定义 132 个事件名的序列化白名单与版本，不使用 typeid 哈希作为网络协议 |
 | 数据与计算 | 花色点数编码、基数倍率、舍入规则，以及与付费加强的接入 |

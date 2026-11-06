@@ -253,4 +253,18 @@ enum class CounterOperation : std::uint8_t {
     Set  // 直接把当前值设为 value
 };
 
+/// 调度记录中的输入来源；由可信入口填写。
+enum class EventOrigin : std::uint8_t {
+    Server,  // 服务端业务或内部效果。
+    Client,  // 已识别玩家提交的外部请求。
+    Timer,  // 定时器到期。
+    Connection  // 加入、掉线或重连。
+};
+
+/// 调度记录中的执行模式；实际行为仍由业务规则决定。
+enum class ExecutionMode : std::uint8_t {
+    Commit,  // 执行实际操作。
+    Preview  // 只计算预览或报价。
+};
+
 }  // namespace cardgame
