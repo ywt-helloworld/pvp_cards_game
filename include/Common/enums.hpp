@@ -267,4 +267,13 @@ enum class ExecutionMode : std::uint8_t {
     Preview  // 只计算预览或报价。
 };
 
+/// 系统牌在玩家功能牌之前或之后执行。
+enum class SystemOrder : std::uint8_t { BeforePlayers, AfterPlayers };
+enum class GamePhase : std::uint8_t {
+    NotStarted, Shopping, RoundStarting, Playing, RoundEnding, Finished
+};
+inline constexpr std::size_t MAX_PLAYERS = 4;
+inline constexpr std::size_t MAX_FUNCTION_SLOTS = 6;
+inline constexpr std::size_t PLAYER_CARD_ROWS = MAX_PLAYERS * MAX_FUNCTION_SLOTS;
+
 }  // namespace cardgame

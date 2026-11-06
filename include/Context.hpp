@@ -19,12 +19,22 @@ struct DispatchMeta {
     std::optional<EventId> parentEventId;  // 引发当前事件的直接父事件。
     EventId rootEventId = 0;  // 本次操作链的根事件。
     std::optional<AbilityRef> originAbility;  // 产生事件的来源技能，区别于接收技能。
+    std::optional<DefinitionId> originSystemCard;  // 不可见系统牌的定义编号。
     std::uint64_t stateVersion = 0;  // 接收或提交时记录的权威状态版本。
     EventOrigin origin = EventOrigin::Server;  // 来源分类由可信入口填写。
     ExecutionMode mode = ExecutionMode::Commit;  // 实际提交或只读预览。
 };
 
 class Condition;
+
+/// 暂存父事件的完整调用现场；移动保存，不创建另一份共享 Context。
+struct ContextFrame {
+    EventPtr event;
+    DispatchMeta metadata;
+    std::optional<AbilityRef> receiver;
+    std::optional<RewardData> reward;
+    std::optional<ShopData> shop;
+};
 
 /// 每个 Condition 复用一份通用上下文，持有完整的当前派生事件。
 /// 事件专属字段通过 event_as<T>() 读取，包含列表、可选值和 EventBatch 子事件。

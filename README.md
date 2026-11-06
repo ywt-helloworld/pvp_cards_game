@@ -539,6 +539,20 @@ E16 只修改局末分数的扣减数，不改变真实手牌数、名次、胜�
 
 所有代码设计统一维护在根目录 [design.md](design.md)，包括事件监听、状态机与队列、上下文、技能处理器、功能卡、扑克牌、跨玩家效果和联机实现事项。后续类定义、接口与架构调整直接更新该文件。
 
+目前提供可运行的四人 TCP 原型服务器，四个客户端 JOIN 后自动进入商店并调度基础八局流程。原子操作、功能牌与不可见系统牌、动态订阅表、逐牌缓冲结算和玩家状态均已接入。默认货架使用明确标为 Demo 的演示卡池，可通过工厂接口替换；正式卡包、E 系列拓展牌与 U06 仍待业务接入，下面的玩法规格继续作为目标规则。
+
+构建与验证：
+
+```text
+cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --parallel 4
+ctest --test-dir build --output-on-failure
+build/cardgame_server.exe --bind 127.0.0.1 --port 27345
+```
+
+其他平台选择本机的 CMake 生成器。客户端入座、操作、私有状态和重连协议详见 [服务器构建与协议](design.md#10-服务器构建与协议)。
+
+
 ---
 
 ## 10. 联机与超时处理

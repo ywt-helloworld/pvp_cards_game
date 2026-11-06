@@ -372,4 +372,22 @@ void Condition::clear_context() noexcept {
     context_.shop_.reset();
 }
 
+ContextFrame Condition::take_context() noexcept {
+    ContextFrame frame{std::move(context_.event_), context_.metadata_,
+        context_.receiver_, context_.reward_, context_.shop_};
+    clear_context();
+    return frame;
+}
+
+const Context& Condition::restore_context(ContextFrame frame) {
+    if (!frame.event) throw std::invalid_argument("Cannot restore empty context");
+    (void)inspect_event(*frame.event);
+    context_.event_ = std::move(frame.event);
+    context_.metadata_ = std::move(frame.metadata);
+    context_.receiver_ = frame.receiver;
+    context_.reward_ = frame.reward;
+    context_.shop_ = frame.shop;
+    return context_;
+}
+
 }  // namespace cardgame

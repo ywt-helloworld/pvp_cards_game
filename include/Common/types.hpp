@@ -6,6 +6,9 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include "enums.hpp"
+#include <bitset>
+#include <vector>
 
 namespace cardgame {
 
@@ -45,5 +48,18 @@ using EventReceiver = std::function<void(EventPtr)>;
 
 /// 输入源提供的取消订阅函数；注册模块应保证它不抛异常。
 using EventDisconnect = std::function<void()>;
+
+struct Context;
+struct CardEffects;
+class FunctionCards;
+class Player;
+using EventMask = std::bitset<TOTAL_EVENT_TYPES>;
+using TriggerMatrix = std::vector<EventMask>;
+using EventList = std::vector<EventPtr>;
+using PlayerOrder = std::vector<Players>;
+using CardPtr = std::shared_ptr<FunctionCards>;
+using FunctionCardFactory = std::function<CardPtr(Player&, std::size_t)>;
+using CardHandler = std::function<void(const Context&, CardEffects&)>;
+using InitialDealOperation = std::function<bool(RoundId, const PlayerOrder&, int)>;
 
 }  // namespace cardgame

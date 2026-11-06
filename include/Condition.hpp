@@ -33,6 +33,8 @@ public:
 
     /// 释放当前事件并清空全部关联数据，Context 本身的地址保持不变。
     void clear_context() noexcept;
+    ContextFrame take_context() noexcept;
+    const Context& restore_context(ContextFrame frame);
 
 private:
     void require_event() const;
