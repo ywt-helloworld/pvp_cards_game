@@ -16,7 +16,7 @@ enum class Players : std::uint8_t {
     P4  // 4 号座位
 };
 
-/// 唯一的操作类型编号；0～131 分别对应 132 个具体事件，新增类型应追加在 Count 前。
+/// 唯一的操作类型编号；0～135 对应 136 个具体事件，新增类型应追加在 Count 前。
 enum class EventType : std::size_t {
     GameStart = 0,  // 整场开始；参数见 GameStartedEvent。
     ShopEnter = 1,  // 进入局前商店；参数见 ShopEnteredEvent。
@@ -150,7 +150,11 @@ enum class EventType : std::size_t {
     StateSnapshotReadyControl = 129,  // 同步快照已经准备；参数见 StateSnapshotReadyControl。
     PlayOptionsReadyControl = 130,  // 合法出牌或赖子方案已经计算；参数见 PlayOptionsReadyControl。
     ShopQuoteReadyControl = 131,  // 商店报价已经计算；参数见 ShopQuoteReadyControl。
-    Count = 132  // 类型总数及掩码长度；不是一个可提交的事件类型。
+    ConsumableUsed = 132,  // 消耗牌已购买并完成即时效果；参数见 ConsumableUsedEvent。
+    ShopSlotsChanged = 133,  // 普通商店货位数量变化；参数见 ShopSlotsChangedEvent。
+    ShopLevelChanged = 134,  // 商店等级变化；参数见 ShopLevelChangedEvent。
+    FunctionCardEnhanced = 135,  // 功能牌实例强化成功；参数见 FunctionCardEnhancedEvent。
+    Count = 136  // 类型总数及掩码长度；不是一个可提交的事件类型。
 };
 
 /// 事件类型总数，可用作按 EventType 索引的数组或技能订阅掩码长度。
@@ -165,6 +169,10 @@ enum class HandPattern : std::uint8_t {
     Bomb,  // 炸弹
     StraightFlush  // 同花顺
 };
+/// 同一货架上的商品类型；消耗牌购买后不装备、不存入背包。
+enum class ShopProductKind : std::uint8_t { FunctionCard, Consumable };
+inline constexpr std::size_t MAX_SHOP_SLOTS = 6;
+inline constexpr unsigned MAX_SHOP_LEVEL = 3;
 /// 普通扑克牌的四种花色；王的花色处理由具体操作规则决定。
 enum class Suit : std::uint8_t {
     Spades,  // 黑桃

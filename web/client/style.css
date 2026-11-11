@@ -5,3 +5,5 @@
 @supports(padding:max(0px)){body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);padding-bottom:env(safe-area-inset-bottom)}}
 /* Keep the play controls within a typical 844 × 390 landscape viewport. */
 @media(max-width:900px) and (orientation:landscape){.game .roomline{padding:4px 0}.game .roomline .quiet{padding:2px 6px;font-size:10px}.table{min-height:46px;flex-direction:row;gap:8px;flex-wrap:wrap}.table-label{font-size:10px}.table .poker{height:46px;width:34px;flex-basis:34px;font-size:16px;padding:4px}.table .poker .suit{font-size:12px}.table .poker.joker{font-size:12px}.table .poker small{font-size:8px}.hand{min-height:92px}.poker{height:74px}.hand-heading .quiet{padding:2px 7px;font-size:10px}.actionbar button{padding:6px 12px}.personal-effects{padding-top:4px;gap:4px}.effect-tag{padding:2px 5px;font-size:9px}}
+
+.target-label{font-size:11px;display:flex;flex-direction:column;gap:5px}.target-label select{max-width:100%;min-width:0;background:#f6f4e8;border:1px solid #9ba995;border-radius:4px;padding:6px;color:#263b2c;font:inherit}

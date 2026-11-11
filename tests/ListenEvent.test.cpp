@@ -54,7 +54,7 @@ void factory_covers_all_events() {
         assert(event && event->type == type && event->actor == Players::P2);
         concreteTypes.emplace(typeid(*event));
     }
-    assert(concreteTypes.size() == 132);
+    assert(concreteTypes.size() == TOTAL_EVENT_TYPES);
     auto request = ListenEvent::create_event(EventType::PlayCardsRequest);
     assert(dynamic_cast<PlayCardsRequest*>(request.get()));
     auto notification = ListenEvent::create_event(EventType::DrawAfter);
@@ -297,5 +297,5 @@ int main() {
     immediate_callback_can_stop_during_subscription();
     all_unsubscribers_run_even_if_one_throws();
     concurrent_sources_and_move_only_data();
-    std::cout << "ListenEvent: 7 contract scenarios passed; 132 event types covered.\n";
+    std::cout << "ListenEvent: 7 contract scenarios passed; " << TOTAL_EVENT_TYPES << " event types covered.\n";
 }

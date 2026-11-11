@@ -26,7 +26,14 @@ public:
     ResourceBonusCard(Player& owner, std::size_t sequence, DefinitionId definition,
                       std::string name, EventType trigger, ScoreValue score, CoinValue coins);
     void resolve(const Context& context, CardEffects& effects) override;
+    std::string description() const override;
+    ScoreValue score_bonus() const noexcept { return score_; }
+    CoinValue coin_bonus() const noexcept { return coins_; }
+protected:
+    void validate_bonus_upgrade(ScoreValue score, CoinValue coins) const override;
+    void apply_bonus_upgrade(ScoreValue score, CoinValue coins) noexcept override;
 private:
+    EventType trigger_;
     Player& owner_;
     ScoreValue score_;
     CoinValue coins_;

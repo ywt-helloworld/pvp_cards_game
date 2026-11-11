@@ -30,6 +30,13 @@ try {
   await p.screenshot({path:'../test-results/mobile-shop.png',fullPage:true});
   await p.locator('.buy:enabled').first().click();await p.locator('.owned-card').waitFor();
   assert.match(await p.locator('.owned-card').textContent(),/自己.*后/);
+  if(app) {
+    await pages[1].getByRole('button',{name:'购买并使用',exact:true}).click();
+    await pages[1].waitForFunction(()=>document.querySelectorAll('.offers > *').length===4);
+    assert.equal(await pages[1].locator('.owned-card').count(),0);
+    await pages[2].getByRole('button',{name:'购买并使用',exact:true}).click();
+    await pages[2].waitForFunction(()=>document.querySelector('.shop-layout .muted').textContent.includes('Lv.2'));
+  }
   for(const page of pages)await page.locator('[data-do="done"]').click();
   for(const page of pages)await page.locator('.hand .poker').first().waitFor();
   await p.screenshot({path:'../test-results/mobile-playing.png',fullPage:true});
@@ -49,5 +56,5 @@ try {
   await portraitPage.screenshot({path:'../test-results/mobile-portrait.png',fullPage:true});
   assert.equal(errors.length,0,errors.join('\n'));
   assert.ok(websockets.length>=4,'four WebSocket connections upgraded');
-  console.log(JSON.stringify({ok:true,url,fourPlayers:true,buy:true,deal:true,play:true,reconnect:true,mobileLandscape:true,websocketConnections:websockets.length,consoleErrors:errors}));
+  console.log(JSON.stringify({ok:true,url,fourPlayers:true,buy:true,consumables:!!app,deal:true,play:true,reconnect:true,mobileLandscape:true,websocketConnections:websockets.length,consoleErrors:errors}));
 } finally {for(const context of contexts)await context.close();await browser.close();if(app)await app.close();}

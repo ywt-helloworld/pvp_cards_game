@@ -9,7 +9,7 @@ struct RegisteredCard {
     std::uint64_t token = 0; // 装备世代；移槽保持，卸下重装则改变。
     CardPtr card;            // 冻结候选时保持对象存活。
 };
-/// 前 24 行是 P1～P4 各 6 个槽位，之后是系统牌；每行都有 132 列。
+/// 前 24 行是 P1～P4 各 6 个槽位，之后是系统牌；列数由 TOTAL_EVENT_TYPES 决定。
 class Register {
 public:
     Register();
@@ -17,6 +17,7 @@ public:
     CardPtr replace(Players player, std::size_t slot, CardPtr card);
     CardPtr unequip(Players player, std::size_t slot);
     void move(Players player, std::size_t from, std::size_t to);
+    EventPtr enhance(Players player, std::size_t slot, const FunctionCardEnhancement& enhancement);
     std::size_t add_system(CardPtr card);
     CardPtr remove_system(std::size_t row);
     CardPtr at(Players player, std::size_t slot) const;

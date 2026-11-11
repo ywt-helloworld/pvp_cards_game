@@ -22,6 +22,10 @@ bool add_pending_coins(CoinValue& component, CoinValue delta);
 bool reduce_shop_cost(ShopData& quote, CoinValue amount, CoinValue minimum = 0);
 bool grant_free_refresh(std::size_t& credits, std::size_t count);
 bool grant_function_slot(Player& player);
+EventPtr upgrade_shop(Player& player, unsigned amount);
+/// 只增强一张功能牌；数值/技能由卡牌自身校验，注册表同步新订阅。
+EventPtr enhance_function_card(Register& registry, Players player, std::size_t slot,
+                              const FunctionCardEnhancement& enhancement);
 EventPtr add_ability_counter(AbilityRef ability, CounterId counter, int& value, int delta);
 EventPtr set_ability_counter(AbilityRef ability, CounterId counter, int& value, int replacement);
 EventPtr set_ability_usable(AbilityRef ability, bool& usable, bool replacement);
@@ -44,6 +48,11 @@ EventPtr commit(Operation&& operation, Args&&... args) {
     return fact;
 }
 void validate_players(const PlayerOrder& players);
+}
+/// 增加普通货架容量并补货；回调原子提交玩家容量与货架，填写前后数量。
+template<class Operation>
+EventPtr expand_shop_slots(Players player, std::size_t amount, Operation&& operation) {
+    return detail::commit<ShopSlotsChangedEvent>(std::forward<Operation>(operation),player,amount);
 }
 /// 刷新未锁定的货架；业务回调签名为 bool(Players, ShopId, RefreshMode, ShopRefreshedEvent&).
 template<class Operation>

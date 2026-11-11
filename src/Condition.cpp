@@ -321,6 +321,10 @@ Snapshots inspect_event(const Event& event) {
         return inspect_as<PlayOptionsReadyControl>(event);
     case EventType::ShopQuoteReadyControl:
         return inspect_as<ShopQuoteReadyControl>(event);
+    case EventType::ConsumableUsed: return inspect_as<ConsumableUsedEvent>(event);
+    case EventType::ShopSlotsChanged: return inspect_as<ShopSlotsChangedEvent>(event);
+    case EventType::ShopLevelChanged: return inspect_as<ShopLevelChangedEvent>(event);
+    case EventType::FunctionCardEnhanced: return inspect_as<FunctionCardEnhancedEvent>(event);
     default:
         throw std::invalid_argument("Unknown EventType");
     }

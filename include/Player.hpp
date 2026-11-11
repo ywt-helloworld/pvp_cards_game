@@ -24,6 +24,8 @@ public:
     bool connected = true;
     std::uint64_t connectionGeneration = 0;
     std::size_t functionSlots = 4;  // 最大 6，购买设施后增加。
+    std::size_t extraShopSlots = 0; // 消耗牌增加的普通货位，跨局保留。
+    unsigned shopLevel = 1;        // 商店等级，影响可生成商品池。
     std::array<unsigned, 5> upgrades{}; // 各牌型已付费加强次数。
     std::set<DefinitionId> facilities;
     ScoreValue roundPlayScore = 0;

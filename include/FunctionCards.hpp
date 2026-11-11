@@ -5,6 +5,19 @@
 #include <utility>
 namespace cardgame {
 struct CardEffects;
+/// 附加技能仍由若干原子操作组成；只订阅自身需要的事件。
+struct AddedCardSkill {
+    EventMask subscriptions;
+    CardHandler handler;
+    std::string description;
+    bool previewSafe = false;
+};
+/// 强化参数。数值的具体含义由目标卡实现解释；技能可引入新订阅。
+struct FunctionCardEnhancement {
+    ScoreValue scoreDelta = 0;
+    CoinValue coinsDelta = 0;
+    std::vector<AddedCardSkill> skills;
+};
 /// 功能牌是一组原子技能的组合。玩家牌和不可见系统牌共用此接口。
 class FunctionCards {
 public:
@@ -14,6 +27,11 @@ public:
                   SystemOrder order = SystemOrder::AfterPlayers, bool previewSafe = false);
     virtual ~FunctionCards() = default;
     virtual void resolve(const Context& context, CardEffects& effects) = 0;
+    void resolve_all(const Context& context, CardEffects& effects);
+    virtual std::string description() const { return {}; }
+    std::string full_description() const;
+    unsigned enhancement_level() const noexcept { return enhancementLevel_; }
+    void validate_enhancement(const FunctionCardEnhancement& enhancement) const;
     const std::optional<CardRef>& reference() const noexcept { return reference_; }
     DefinitionId definition() const noexcept { return definition_; }
     const std::string& name() const noexcept { return name_; }
@@ -31,11 +49,19 @@ public:
         const bool changed = available_; available_ = false; return changed;
     }
     static EventMask listens_to(std::initializer_list<EventType> events);
+protected:
+    virtual void validate_bonus_upgrade(ScoreValue score, CoinValue coins) const;
+    virtual void apply_bonus_upgrade(ScoreValue score, CoinValue coins) noexcept;
 private:
+    friend class Register;
+    void enhance(const FunctionCardEnhancement& enhancement);
     std::optional<CardRef> reference_;
     DefinitionId definition_;
     std::string name_;
-    const EventMask subscriptions_; // 所有可能触发的事件；装备期间保持不变。
+    const EventMask baseSubscriptions_;
+    EventMask subscriptions_; // 强化附加技能后由 Register 同步到订阅矩阵。
+    std::vector<std::shared_ptr<AddedCardSkill>> addedSkills_;
+    unsigned enhancementLevel_ = 0;
     SystemOrder order_ = SystemOrder::AfterPlayers;
     bool previewSafe_ = false;
     bool available_ = true;

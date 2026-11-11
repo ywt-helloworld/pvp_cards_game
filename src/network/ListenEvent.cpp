@@ -420,6 +420,10 @@ EventPtr ListenEvent::create_event(EventType type,
     case EventType::ShopQuoteReadyControl:
         event = std::make_unique<ShopQuoteReadyControl>();
         break;
+    case EventType::ConsumableUsed: event=std::make_unique<ConsumableUsedEvent>(); break;
+    case EventType::ShopSlotsChanged: event=std::make_unique<ShopSlotsChangedEvent>(); break;
+    case EventType::ShopLevelChanged: event=std::make_unique<ShopLevelChangedEvent>(); break;
+    case EventType::FunctionCardEnhanced: event=std::make_unique<FunctionCardEnhancedEvent>(); break;
     default:
         throw std::invalid_argument("Unknown EventType");
     }

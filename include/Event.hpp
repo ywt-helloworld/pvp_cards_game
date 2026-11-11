@@ -95,6 +95,7 @@ public:
     ShopId shopId{};  // 商店会话
     SlotId slotId{};  // 货位
     ProductId productId{};  // 商品
+    std::optional<CardRef> targetCard;  // 需要强化目标的消耗牌在购买时选定自己的功能牌；其他商品留空。
 };  // 玩家请求：购买普通货架商品；商店队列；价格由服务端计算。
 
 /// @brief 购买并立即打开卡包。
@@ -335,6 +336,7 @@ public:
     SettlementId settlementId{};  // 待结算事务
     ProductId productId{};  // 商品
     ShopData initialQuote{};  // 初始报价
+    std::optional<CardRef> targetCard;  // 购买请求中已经选定的功能牌目标，成交前仍需重新校验。
 };  // 业务通知：购买报价前，在对应操作提交后发布，供已注册功能牌响应。
 
 /// @brief 购买交付成功后。
@@ -1357,4 +1359,35 @@ public:
     ShopData quote{};  // 当前报价
 };  // 查询反馈：商店报价已经计算，本身不扣款或消耗免费刷新额度。
 
+/// 消耗牌已完成即时效果；购买、扣款和效果提交后才发布。
+class ConsumableUsedEvent final : public Event {
+public:
+    ConsumableUsedEvent() : Event(EventType::ConsumableUsed) {}
+    Players player{};
+    ShopId shopId{};
+    ProductId productId{};
+    DefinitionId definition{};
+    std::optional<CardRef> targetCard;  // 强化目标；无目标消耗牌为空。
+};
+/// 普通货架容量已改变，不是功能牌槽位变化。
+class ShopSlotsChangedEvent final : public Event {
+public:
+    ShopSlotsChangedEvent() : Event(EventType::ShopSlotsChanged) {}
+    Players player{};
+    std::size_t before{}, after{};
+};
+/// 商店等级已改变；后续生成商品使用新等级。
+class ShopLevelChangedEvent final : public Event {
+public:
+    ShopLevelChangedEvent() : Event(EventType::ShopLevelChanged) {}
+    Players player{};
+    unsigned before{}, after{};
+};
+/// 同一功能牌实例强化完成；不视为卸下或重新装备。
+class FunctionCardEnhancedEvent final : public Event {
+public:
+    FunctionCardEnhancedEvent() : Event(EventType::FunctionCardEnhanced) {}
+    CardRef card{};
+    unsigned beforeLevel{}, afterLevel{};
+};
 }  // namespace cardgame

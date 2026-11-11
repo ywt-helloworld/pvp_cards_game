@@ -33,8 +33,19 @@ void InitialDealSystemCard::resolve(const Context& c, CardEffects& out) {
 ResourceBonusCard::ResourceBonusCard(Player& owner, std::size_t sequence,
     DefinitionId definition, std::string name, EventType trigger, ScoreValue score, CoinValue coins)
     : FunctionCards(CardRef{owner.id, sequence}, definition, std::move(name),
-        listens_to({trigger})), owner_(owner), score_(score), coins_(coins) {
+        listens_to({trigger})), trigger_(trigger), owner_(owner), score_(score), coins_(coins) {
     if (score < 0 || coins < 0) throw std::invalid_argument("Negative bonus");
+}
+std::string ResourceBonusCard::description() const {
+    return std::string(trigger_==EventType::PassCommitted?"自己不出后":"自己出牌后")+
+        "：+"+std::to_string(score_)+" 分，+"+std::to_string(coins_)+" 金币";
+}
+void ResourceBonusCard::validate_bonus_upgrade(ScoreValue score,CoinValue coins) const {
+    if(score>std::numeric_limits<ScoreValue>::max()-score_ ||
+       coins>std::numeric_limits<CoinValue>::max()-coins_) throw std::overflow_error("Bonus overflow");
+}
+void ResourceBonusCard::apply_bonus_upgrade(ScoreValue score,CoinValue coins) noexcept {
+    score_+=score;coins_+=coins;
 }
 void ResourceBonusCard::resolve(const Context& c, CardEffects& out) {
     Players subject = c.actor().value_or(Players::P1);

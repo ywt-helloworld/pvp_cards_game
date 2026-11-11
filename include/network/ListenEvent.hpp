@@ -32,7 +32,7 @@ public:
     ListenEvent(ListenEvent&&) = delete;
     ListenEvent& operator=(ListenEvent&&) = delete;
 
-    /// 按运行时编号创建对应的具体事件，覆盖全部 132 种类型。
+    /// 按运行时编号创建对应的具体事件，覆盖 TOTAL_EVENT_TYPES 种类型。
     /// 这里只创建对象和填写 actor；其余操作参数仍需由输入适配器填写。
     /// Count 和未知编号会抛出 std::invalid_argument。
     static EventPtr create_event(

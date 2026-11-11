@@ -64,11 +64,13 @@ std::string state_message(const Scheduler& g,Players viewer) {
             if(!first) { out<<','; }
             first=false;
             out<<"{\"slot\":"<<slot<<",\"seq\":"<<c->reference()->seq<<",\"definition\":"<<c->definition()
-               <<",\"name\":"<<json_string(c->name())<<"}";
+               <<",\"name\":"<<json_string(c->name())<<",\"description\":"<<json_string(c->full_description())
+               <<",\"enhancementLevel\":"<<c->enhancement_level()<<"}";
         }out<<"]}";
     }
     const auto& self=g.player(viewer);
-    out<<"],\"self\":{\"functionSlots\":"<<self.functionSlots<<",\"upgrades\":[";
+    out<<"],\"self\":{\"functionSlots\":"<<self.functionSlots<<",\"shopLevel\":"<<self.shopLevel
+       <<",\"shopSlots\":"<<g.shop(viewer).offers.size()<<",\"upgrades\":[";
     for(std::size_t i=0;i<self.upgrades.size();++i){if(i)out<<',';out<<self.upgrades[i];}
     out<<"],\"facilities\":[";
     bool firstFacility=true;
@@ -97,7 +99,15 @@ std::string state_message(const Scheduler& g,Players viewer) {
             if(i) { out<<','; }
             const auto& o=s.offers[i];
             out<<"{\"slot\":"<<i<<",\"product\":"<<o.id<<",\"definition\":"<<o.definition<<",\"price\":"<<o.price
-               <<",\"name\":"<<json_string(o.name)<<",\"locked\":"<<((s.locked&&*s.locked==i)?"true":"false")<<"}";
+               <<",\"name\":"<<json_string(o.name)<<",\"kind\":"
+               <<json_string(o.kind==ShopProductKind::Consumable?"consumable":"function")
+               <<",\"description\":"<<json_string(o.description)<<",\"targets\":[";
+            if(o.id&&o.kind==ShopProductKind::Consumable) {
+                const auto targets=g.consumable_targets(viewer,o.definition);
+                for(std::size_t j=0;j<targets.size();++j){if(j)out<<',';out<<targets[j].seq;}
+            }
+            out<<"],\"needsTarget\":"<<(o.needsTarget?"true":"false")
+               <<",\"locked\":"<<((s.locked&&*s.locked==i)?"true":"false")<<"}";
         }out<<"]}";
     }else out<<"null";
     out<<",\"choice\":";
@@ -134,6 +144,8 @@ EventPtr parse_request(Players actor,const std::string& command) {
     }else if(verb=="BUY"){
         auto& e=static_cast<BuyShopItemRequest&>(create(EventType::BuyShopItemRequest));
         read(input,e.shopId);read(input,e.slotId);read(input,e.productId);
+        input>>std::ws;
+        if(!input.eof()){std::size_t seq;read(input,seq);e.targetCard=CardRef{actor,seq};}
     }else if(verb=="SELL"){
         auto& e=static_cast<SellFunctionCardRequest&>(create(EventType::SellFunctionCardRequest));
         e.card.owner=actor;read(input,e.shopId);read(input,e.card.seq);

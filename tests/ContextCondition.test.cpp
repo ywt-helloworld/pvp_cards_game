@@ -270,5 +270,5 @@ int main() {
     identities_metadata_and_room_isolation();
     invalid_inputs_preserve_existing_context();
     listener_updates_context_directly();
-    std::cout << "Context/Condition: 6 contract scenarios passed; 132 event types covered.\n";
+    std::cout << "Context/Condition: 6 contract scenarios passed; " << TOTAL_EVENT_TYPES << " event types covered.\n";
 }

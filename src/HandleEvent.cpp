@@ -114,7 +114,7 @@ DispatchReport HandleEvent::handle_event(EventPtr event, DispatchMeta meta) {
                     ? std::optional<AbilityRef>(activation ? *activation : AbilityRef{*card.reference(), 0})
                     : std::nullopt);
                 CardEffects effects(context, card, budget_);
-                try { candidate.card->resolve(context, effects); }
+                try { candidate.card->resolve_all(context, effects); }
                 catch (...) {
                     report.failures.push_back({card.definition(), card.reference(),
                         *context.type(), std::current_exception()});

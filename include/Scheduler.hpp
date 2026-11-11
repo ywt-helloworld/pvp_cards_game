@@ -1,6 +1,7 @@
 #pragma once
 #include "Poker.hpp"
 #include "SystemCards.hpp"
+#include "ConsumableCards.hpp"
 #include <chrono>
 #include <map>
 #include <random>
@@ -10,6 +11,9 @@ struct ShopOffer {
     DefinitionId definition = 0;
     CoinValue price = 0;
     std::string name;
+    ShopProductKind kind = ShopProductKind::FunctionCard;
+    std::string description;
+    bool needsTarget = false;
 };
 struct ShopState {
     ShopId id = 0;
@@ -33,8 +37,11 @@ struct SchedulerConfig {
         std::string name;
         CoinValue price = 0;
         FunctionCardFactory create;
+        unsigned minimumShopLevel = 1;
     };
     std::vector<CardDefinition> catalog; // 为空时使用明确标识为 Demo 的测试卡池。
+    std::vector<ConsumableCard> consumables; // 为空时使用 Demo 消耗牌。
+    double consumableChance = 0.3; // 前两个货位保留功能牌，其余为混合货位。
     std::uint32_t seed = std::random_device{}();
     std::size_t rounds = 8;
     std::chrono::seconds shopTime{60}, turnTime{30}, choiceTime{30};
@@ -76,11 +83,20 @@ public:
     const Register& registry() const noexcept { return registry_; }
     const Condition& condition() const noexcept { return condition_; }
     std::size_t next_card_sequence(Players player);
+    std::vector<CardRef> consumable_targets(Players player, DefinitionId definition) const;
 private:
     DispatchReport dispatch(EventPtr event, DispatchMeta meta = {});
     void process(const Context& context, CardEffects& effects);
     void open_shops(CardEffects& effects);
     void fill_shop(Players player, bool refreshing, std::size_t firstSlot = 0);
+    void fill_offers(Players player, ShopState& shop, bool refreshing, std::size_t firstSlot,
+                     std::mt19937& random, std::uint64_t& sequence);
+    std::size_t shop_slots(const Player& player) const;
+    const ConsumableCard& consumable(DefinitionId definition) const;
+    void validate_consumable(Players player, const ConsumableCard& card,
+                             std::optional<CardRef> target) const;
+    void use_consumable(Players player, const ConsumableCard& card,
+                        std::optional<CardRef> target, CardEffects& out);
     void start_round(CardEffects& effects);
     bool initial_deal(RoundId round, const PlayerOrder& order, int count);
     void next_turn(Players player, CardEffects& effects);

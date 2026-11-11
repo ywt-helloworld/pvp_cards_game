@@ -82,6 +82,15 @@ std::size_t Register::add_system(CardPtr card) {
     matrix_[row] = entries_[row].card->subscriptions();
     return row;
 }
+EventPtr Register::enhance(Players player,std::size_t slot,const FunctionCardEnhancement& enhancement) {
+    const auto row=row_of(player,slot);auto card=entries_[row].card;
+    if(!card)throw std::invalid_argument("Enhancement target is not equipped");
+    auto event=std::make_unique<FunctionCardEnhancedEvent>();
+    event->card=*card->reference();event->beforeLevel=card->enhancement_level();
+    card->enhance(enhancement);
+    matrix_[row]=card->subscriptions(); // 保持实例、槽位与装备 token，不制造卸下/装备事件。
+    event->afterLevel=card->enhancement_level();return event;
+}
 CardPtr Register::remove_system(std::size_t row) {
     if (row < PLAYER_CARD_ROWS || row >= entries_.size())
         throw std::out_of_range("Invalid system row");

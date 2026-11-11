@@ -2,7 +2,7 @@
 
 所有代码设计统一维护在根目录 `design.md`，后续的类定义、接口、事件协议、状态机、调度与联机实现说明都更新在此。游戏规则见 [README.md](README.md)，卡牌参考资料见 [设计调研](docs/function-card-research.md)。
 
-当前已实现事件模型、Context / Condition、回调监听、59 个原子操作、玩家与功能牌、动态 Register、按牌缓冲的 HandleEvent，以及四人 TCP 原型服务器。玩家与系统功能牌共用同一条结算路径。默认卡池明确标记为 Demo，正式卡池可通过工厂接口替换；卡包、E 系列拓展牌与 U06 的业务尚待接入。
+当前已实现事件模型、Context / Condition、回调监听、62 个原子操作、玩家与功能牌、动态 Register、按牌缓冲的 HandleEvent，以及四人 TCP 原型服务器。玩家与系统功能牌共用同一条结算路径。默认卡池明确标记为 Demo，正式卡池可通过工厂接口替换；卡包、E 系列拓展牌与 U06 的业务尚待接入。
 
 | 模块 | 实现文件 |
 |---|---|
@@ -33,6 +33,7 @@
 - [9. 后续实现事项](#9-后续实现事项)
 - [10. 服务器构建与协议](#10-服务器构建与协议)
 - [11. 网页版与服务器部署](#11-网页版与服务器部署)
+- [12. 消耗牌与功能牌强化](#12-消耗牌与功能牌强化)
 
 ## 1. 总体架构
 
@@ -74,9 +75,9 @@
 - Effect：业务流程或处理器提出的具体效果请求，由对应系统牌与业务模块校验并执行。
 - Control：连接、计时器、拒绝和同步结果，不直接当作成功行为触发功能卡。
 
-`EventType` 覆盖全部 132 个具体事件，每项对应一个具名事件类与确定的业务含义；`Event` 保存只读 `type` 和可选 `actor`，派生类保存目标与操作参数。Condition 按 `type` 查找处理规则，事件类只承载数据。
+`EventType` 覆盖全部 136 个具体事件，每项对应一个具名事件类与确定的业务含义；`Event` 保存只读 `type` 和可选 `actor`，派生类保存目标与操作参数。Condition 按 `type` 查找处理规则，事件类只承载数据。
 
-原有 63 个通知类型编号 0～62 保持不变，其余 69 个请求、效果与控制类型追加为 63～131，`TOTAL_EVENT_TYPES = 132`。Condition 校验 type 与根事件实际类；HandleEvent 和 Register 决定响应卡牌，Scheduler 与系统牌校验业务状态。主动、被动描述触发方式，同一原子操作可被不同触发方式复用。
+原有 63 个通知类型编号 0～62 保持不变，其余 69 个请求、效果与控制类型追加为 63～131；消耗牌与强化通知追加为 132～135，`TOTAL_EVENT_TYPES = 136`。Condition 校验 type 与根事件实际类；HandleEvent 和 Register 决定响应卡牌，Scheduler 与系统牌校验业务状态。主动、被动描述触发方式，同一原子操作可被不同触发方式复用。
 
 每个房间的 Condition 只创建一份 `Context` 并反复更新；单房间运行时总共只有一份。它是该房间全局共享的调用现场，通过 `Condition::context()` 提供只读访问，不使用跨房间的进程级可变全局对象。
 
@@ -121,7 +122,7 @@ Context 的对象生命周期属于 Condition；on_event 和 clear_context 始�
 
 | 接口 | 行为 |
 |---|---|
-| Condition::on_event(EventPtr, DispatchMeta) | 校验 132 种根事件，更新并返回同一个 const Context& |
+| Condition::on_event(EventPtr, DispatchMeta) | 校验 136 种根事件，更新并返回同一个 const Context& |
 | Condition::set_receiver / set_reward / set_shop | 修改当前接收者或工作快照 |
 | Condition::take_context() | 移出事件、调度记录和快照，清空共享 Context，返回可移动 ContextFrame |
 | Condition::restore_context(ContextFrame) | 校验并恢复原事件和工作快照 |
@@ -148,7 +149,7 @@ BeforePlayRewardEvent
 
 ### 2.7 全部事件清单与派生类
 
-本清单以当前已经确定的游戏规则和通用技能能力为边界，共 **132 个具体事件**。新增机制继续追加清单和派生类，不把尚未发生的成功行为当作客户端请求。玩家、基础牌局、牌型、随机和部分商店／选择流程已实现；其余业务通过对应系统牌和原子操作适配。
+本清单以当前已经确定的游戏规则和通用技能能力为边界，共 **136 个具体事件**。新增机制继续追加清单和派生类，不把尚未发生的成功行为当作客户端请求。玩家、基础牌局、牌型、随机和部分商店／选择流程已实现；消耗牌与功能牌强化的新增事件和接口见第 12 节；其余业务通过对应系统牌和原子操作适配。
 
 | 类别 | 数量 | 主要来源 | 是否直接触发功能卡 |
 |---|---:|---|---|
@@ -1493,7 +1494,7 @@ Register 的 EventMask 只记录“可能响应哪些类型”。卡牌 resolve 
 
 ### 3.2 第一版时机表
 
-区分整场游戏（Game）、一局（Round）、一巡（Trick）、一名玩家的一次行动回合（Turn）。EventType 编号直接作为技能订阅布尔集合的下标，掩码总长度为 132。下表列出原有 0～62 号业务通知的触发边界；63～83 为操作请求，84～121 为效果，122～131 为控制事件，完整类型名见上面的事件枚举与清单。旧掩码扩展时新增位为 false。Register 与 HandleEvent 决定响应卡牌，`Count` 仅用于确定掩码长度。
+区分整场游戏（Game）、一局（Round）、一巡（Trick）、一名玩家的一次行动回合（Turn）。EventType 编号直接作为技能订阅布尔集合的下标，掩码总长度为 136。下表列出原有 0～62 号业务通知的触发边界；63～83 为操作请求，84～121 为效果，122～131 为控制事件，完整类型名见上面的事件枚举与清单。旧掩码扩展时新增位为 false。Register 与 HandleEvent 决定响应卡牌，`Count` 仅用于确定掩码长度。
 
 | 下标 | 名称 | 精确边界与用途 |
 |---|---|---|
@@ -1583,7 +1584,7 @@ Preview 模式只执行显式声明 preview_safe 的卡；此类牌应只修改�
 
 ### 3.5 C++17 接口草案
 
-当前共 59 个公开原子函数。加分与加金币、支付与取得资源、添加与移除状态分别提供；转账、整张牌替换、扩展牌的组合效果由卡牌或业务模块分别调用所需函数，不增加复合 Ability。
+当前共 62 个公开原子函数。加分与加金币、支付与取得资源、添加与移除状态分别提供；转账、整张牌替换、扩展牌的组合效果由卡牌或业务模块分别调用所需函数，不增加复合 Ability。
 
 直接实现的数值、卡槽与卡状态操作先检查溢出、余额和范围再修改。modify 类函数只修改指定值；无变化返回空事件或 false。multiply_pending_score 使用整数有理数及明确取整，Nearest 的中点向远离零方向取整；中间乘积超出范围则拒绝。
 
@@ -1693,7 +1694,7 @@ FunctionCards 是玩家牌与系统牌共同的抽象基类。只在卡牌层提
 |---|---|
 | optional<CardRef> reference | 玩家牌的 owner 和稳定 seq；系统牌为空 |
 | definition / name | 牌种与可读名称 |
-| EventMask subscriptions | 所有潜在响应事件，构造后不变 |
+| EventMask subscriptions | 所有潜在响应事件，原始订阅不变；强化增加订阅时同步注册表 |
 | available / usable | 永久有效与临时可执行开关 |
 | SystemOrder | 系统牌前置或后置，玩家牌按槽位顺序 |
 | preview_safe | 是否允许执行只读预览，默认 false |
@@ -1702,13 +1703,13 @@ Player 保存座位、名字、金币、分数、真实手牌 ID、连接状态�
 
 ### 4.3 技能管理与生命周期
 
-Register 初始 24 行，row = playerIndex × 6 + slot，slot 为 0～5。系统牌追加到同一矩阵，列数始终为 132，所以行数为 24 + 系统行容量。系统牌卸下后保留空行稳定其他行号，后续可重用。
+Register 初始 24 行，row = playerIndex × 6 + slot，slot 为 0～5。系统牌追加到同一矩阵，列数始终为 136，所以行数为 24 + 系统行容量。系统牌卸下后保留空行稳定其他行号，后续可重用。
 
-每行使用 bitset<132>，矩阵为 vector<EventMask>。装备时复制全部潜在触发位；移槽移动该行，卸下清空，替换刷新。matching 根据当前事件的列筛选，并检查牌的有效和可用状态。
+每行使用 bitset<TOTAL_EVENT_TYPES>，矩阵为 vector<EventMask>。装备时复制全部潜在触发位；移槽移动该行，卸下清空，替换刷新。matching 根据当前事件的列筛选，并检查牌的有效和可用状态。
 
 公开接口包括 equip、replace、unequip、move、add_system、remove_system、at、player_cards、matrix、matching 和 current。Register 拒绝错误归属、重复装备、复用不同对象的历史 CardRef、超过第六槽等输入。候选包含共享所有权和装备世代；卸下重装或替换不会让旧候选误调用新牌，结算中新增的牌不插入当前冻结列表。
 
-系统牌的 visible_to_players 为 false，player_cards 与网络玩家卡槽列表均不会包含它们。服务器默认注册资源系统牌 900001、流程系统牌 900003、发牌系统牌 900002，矩阵初始为 27×132。
+系统牌的 visible_to_players 为 false，player_cards 与网络玩家卡槽列表均不会包含它们。服务器默认注册资源系统牌 900001、流程系统牌 900003、发牌系统牌 900002，矩阵初始为 27×136。
 
 ### 4.4 C++17 接口草案
 
@@ -1747,7 +1748,7 @@ Scheduler 输入按 P1～P4 排列的四个 Player，注册所有系统牌后自
 | 接口 | 行为 |
 |---|---|
 | ListenEvent(EventReceiver) | 设置事件接收函数；拒绝空接收函数 |
-| create_event(EventType, actor) | 按编号创建全部 132 种具体事件中的一种；仅填写类型和 actor，其他参数由调用方填写 |
+| create_event(EventType, actor) | 按编号创建全部 136 种具体事件中的一种；仅填写类型和 actor，其他参数由调用方填写 |
 | listen<EventT, Args...>(subscribe, translate) | 注册来源回调；每次回调创建 EventT，调用 translate(EventT&, Args...) 填入参数，再交付接收端 |
 | stop() | 停止新事件交付并取消全部订阅；同一实例停止后不再启动 |
 | listening() / subscription_count() | 查询是否仍接收输入及当前持有的订阅数 |
@@ -1801,7 +1802,7 @@ bool bind_play_input(
 
 参数映射或接收函数的异常传回来源调用方，未完成映射的事件不交付。显式 stop() 会尝试全部取消函数后重新抛出第一个异常；析构期间只执行清理。来源注册函数即使同步触发首个回调，或该回调中停止监听器，也会正确取消刚刚建立的订阅。
 
-验证用例见 tests/ListenEvent.test.cpp，覆盖 132 种工厂映射、不同参数来源、无效类型、注册及映射失败、停止与析构、同步重入、并发来源和 move-only 参数。可在仓库根目录使用 C++17 编译器运行：
+验证用例见 tests/ListenEvent.test.cpp，覆盖 136 种工厂映射、不同参数来源、无效类型、注册及映射失败、停止与析构、同步重入、并发来源和 move-only 参数。可在仓库根目录使用 C++17 编译器运行：
 
 ```text
 g++ -std=c++17 -Wall -Wextra -Werror -pedantic -pthread -Iinclude src/network/ListenEvent.cpp tests/ListenEvent.test.cpp -o ListenEvent.test.exe
@@ -1974,3 +1975,63 @@ ssh cardgame 'pm2 logs cardgame-web --lines 50 --nostream'
 ```
 
 公网测试入口为 [http://47.76.64.154/](http://47.76.64.154/)，只需 80 端口。当前不配置域名与 HTTPS。此发布是完整基础流程的可玩测试实例；正式卡包、E 系列拓展牌和 U06 仍保持未开放状态。
+
+## 12. 消耗牌与功能牌强化
+
+### 12.1 类型与生命周期
+
+原有实现只接入设施、牌型加强服务和持续功能牌；本次增加通用消耗牌商品。规则见 README §6.8，以下是代码设计。
+
+`ConsumableCards.hpp` 定义 `ConsumableCard` 商品与三个具名效果参数 `ExpandShopSlots`、`UpgradeShop`、`EnhanceFunctionCard`，用 `ConsumableEffect` 的 `std::variant` 保存其中一种。每个效果对应一个原子状态操作；新增相同机制的消耗牌只需配置定义编号、名称、价格、说明和效果参数。消耗牌不是持续订阅者，不继承 `FunctionCards`，不占功能槽或系统牌注册行，没有库存、装备和延后使用接口。
+
+`ShopOffer.kind` 用公共枚举 `ShopProductKind` 区分功能牌和消耗牌；定义编号在两类商品之间唯一，实例编号 `ProductId` 标识本次具体出货。`SchedulerConfig.consumables` 可注入消耗牌定义，空列表使用四张 Demo 牌；`consumableChance` 配置混合货位的出货比例。普通功能牌工厂保持原有接口，新增 `minimumShopLevel` 限制出货等级。
+
+### 12.2 购买与一次性执行
+
+沿用 `BuyShopItemRequest` 与购买报价链，不再增加一个“存入背包后使用”的请求。强化牌在购买请求中携带 `optional<CardRef> targetCard`；经过 `BeforeShopPurchaseEvent` 原样传递，成交时重新核对当前商店、商品实例、余额、目标归属、装备状态、强化支持性和容量上限。
+
+```text
+BuyShopItemRequest(shop, slot, product, optional targetCard)
+ → BeforeShopPurchaseEvent（报价）
+ → 系统牌重新校验，并提交即时效果、扣款、清空商品和解除该货位锁定
+ → 效果事实通知 / CoinsChanged / ShopPurchased / ConsumableUsed
+```
+
+上述操作与通知先进入同一系统牌的结算过程；该牌完成后才逐个处理后续事件，因此监听者看到已扣款、已使用和已清空的最终状态。余额不足、目标失效、目标属于别人、达到上限、过期商店或重复商品实例等业务失败不会扣款或消耗商品。既有原子操作约定继续适用：已经提交的操作不会因为后续监听牌报错而回滚。
+
+购买消耗牌不检查功能槽是否已满；购买普通功能牌仍需空槽，且不接受强化目标。没有合法目标的强化牌不生成，锁定后目标发生变化的商品也必须在成交时重新检查。只读状态和报价不购买、不使用、不推进随机数。
+
+### 12.3 扩容与商店升级
+
+`Player.extraShopSlots` 保存消耗牌带来的扩容，实际货位数为 `min(6, 设施基础宽度 + extraShopSlots)`，设施基础宽度为 3/4/5。扩容只补新增货位，不替换原有商品、锁定项或已买空的位置。`fill_offers` 支持为临时货架生成新位置，成功后一起提交货架、容量、随机数状态和实例序列。功能牌槽仍由 `functionSlots` 独立管理。
+
+`Player.shopLevel` 初始 1、Demo 上限 3，`abilities::upgrade_shop` 是独立原子操作。等级立即改变；原货架商品保留，之后的刷新、扩容补货和下局商店按新等级筛选候选。默认功能牌 1～6 / 7～8 / 9～10 分别从商店等级 1 / 2 / 3 解锁，暂不另加未审定的稀有度权重。扩容、等级和原有设施跨局及加赛保留；`StartNewGameRequest` 全票生效时一起清空。
+
+### 12.4 强化数值与附加技能
+
+`FunctionCardEnhancement` 包含 `scoreDelta`、`coinsDelta` 和 `vector<AddedCardSkill>`。这是传给目标牌的强化参数，没有恢复统一 Ability 基类。卡牌通过 `validate_bonus_upgrade` 和不抛异常的 `apply_bonus_upgrade` 解释自己的数值；`ResourceBonusCard` 已实现得分、金币增量与溢出检查，其他类型默认拒绝不支持的数值强化。
+
+`AddedCardSkill` 保存订阅掩码、卡牌级处理回调、说明和预览安全标记。原有 `resolve` 继续只处理原始订阅；`HandleEvent` 改为调用 `resolve_all`，按“原有技能 → 附加技能顺序”共享同一个 `CardEffects` 缓冲区。新增“不出”技能不会把原先“出牌加分”也触发一次。技能列表按一次卡牌处理冻结，处理期间再强化自身只影响后续处理；技能对象保持共享存活，不丢失有状态回调的内部状态。
+
+`Register::enhance(player, slot, enhancement)` 在所有校验和内存准备完成后更新同一实例，并同步矩阵订阅位。不更换 `CardRef`、槽位、指针或装备 token，也不伪造卸下/装备通知。`abilities::enhance_function_card` 对此提供原子技能接口。仅有纯技能强化也有效；系统牌、废除牌、不支持的数值、负增量、空技能、无效掩码或溢出会被拒绝。强化等级作为实例信息保留，出售该牌后不转移到新购同名实例。
+
+### 12.5 新事件与协议
+
+保留原 0～131 编号，追加四个纯事实事件，`Count` 和 `TOTAL_EVENT_TYPES` 更新为 136；Condition 和 ListenEvent 均接入新的具体派生类。默认矩阵为 27×136，消耗牌本身不增加行数。
+
+| 编号 | EventType / 派生类 | 参数与含义 |
+|---|---|---|
+| 132 | ConsumableUsed / ConsumableUsedEvent | player、shopId、productId、definition、可选 targetCard；即时使用已经完成 |
+| 133 | ShopSlotsChanged / ShopSlotsChangedEvent | player、before、after；普通货架容量已变化 |
+| 134 | ShopLevelChanged / ShopLevelChangedEvent | player、before、after；商店等级已变化 |
+| 135 | FunctionCardEnhanced / FunctionCardEnhancedEvent | card、beforeLevel、afterLevel；同一功能牌实例强化已完成 |
+
+TCP 购买命令扩展为 `BUY shopId slot productId [targetSeq]`，旧的无目标购买仍兼容；owner 始终绑定当前连接玩家。Socket.IO `buy` 操作对应可选整数 `target`。内部成功事实仍不允许客户端伪造。
+
+状态同步给本人增加 `self.shopLevel`、`self.shopSlots`，商品增加 `kind`、`description`、`needsTarget` 和合法目标序号列表 `targets`。功能牌增加服务端生成的 `description` 与 `enhancementLevel`；网页展示服务器当前效果，不用原始 Demo 常量覆盖强化后的数值。商店阶段其他玩家的私有购物资源仍隐藏。
+
+### 12.6 验证
+
+`tests/Consumables.test.cpp` 覆盖功能槽全满仍可购买消耗牌、扩容当场补货、跨局保留和新游戏重置、等级解锁、上限过滤、余额不足、无目标/越权/失效目标、重复商品、原实例数字强化、附加技能更新订阅、旧技能不误触发、溢出不留下部分强化，以及新协议与状态字段。原有监听和 Context 测试遍历全部 136 种事件。
+
+Node 集成测试和手机横屏浏览器测试增加实际购买扩容、升级并确认即时状态、不装备消耗牌的场景；四人入座、正常购牌、出牌、重连和隐私回归继续运行。

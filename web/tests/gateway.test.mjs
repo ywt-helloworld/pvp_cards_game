@@ -8,6 +8,8 @@ import { command } from '../server/commands.mjs';
 
 test('gateway accepts only typed operations, never actor or system events', () => {
   assert.equal(command({kind:'play',turn:5,cards:[1,53],actor:3}), 'PLAY 5 1 53');
+  assert.equal(command({kind:'buy',shop:1,slot:2,product:7,target:4,actor:3}),'BUY 1 2 7 4');
+  assert.throws(()=>command({kind:'buy',shop:1,slot:2,product:7,target:-1}));
   for (const data of [{kind:'SCORE'}, {kind:'play',turn:1,cards:[1,1]},
     {kind:'done',shop:'1\nNEW'}, {kind:'upgrade',shop:1,pattern:5}]) assert.throws(()=>command(data));
 });
@@ -37,6 +39,15 @@ test('four browsers: rooms, private shop, buy, deal, play, reconnect and isolati
     assert.equal((await send(first,'action',{kind:'buy',shop:s.shop.id,slot:offer.slot,product:offer.product})).ok,true);
     await until(()=>first.state.players[first.state.seat].cards.length===1,'bought card');
     const me=first.state.players[first.state.seat];assert.equal(me.coins,6-offer.price);
+    const expand=clients[1], level=clients[2];
+    assert.equal(expand.state.shop.offers[2].definition,1001);
+    const item=expand.state.shop.offers[2],oldSlots=expand.state.shop.offers.length;
+    assert.equal((await send(expand,'action',{kind:'buy',shop:expand.state.shop.id,slot:2,product:item.product})).ok,true);
+    await until(()=>expand.state.shop.offers.length===oldSlots+1,'immediate shop expansion');
+    assert.equal(expand.state.players[expand.state.seat].cards.length,0,'consumable never equipped');
+    assert.equal(expand.state.players[expand.state.seat].coins,6-item.price);
+    assert.equal((await send(level,'action',{kind:'buy',shop:level.state.shop.id,slot:2,product:level.state.shop.offers[2].product})).ok,true);
+    await until(()=>level.state.self.shopLevel===2,'shop upgrade');
     for(const c of clients.slice(0,4)) assert.equal((await send(c,'action',{kind:'done',shop:c.state.shop.id})).ok,true);
     await until(()=>clients.slice(0,4).every(c=>c.state?.phase==='playing'),'initial deal');
     for(const c of clients.slice(0,4)){assert.equal(c.state.hand.length,7);assert.equal(c.state.players.filter(p=>p.hand!==undefined).length,0);}

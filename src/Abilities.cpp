@@ -82,6 +82,16 @@ bool grant_function_slot(Player& p) {
     if (p.functionSlots >= MAX_FUNCTION_SLOTS) return false;
     ++p.functionSlots; return true;
 }
+EventPtr enhance_function_card(Register& registry,Players player,std::size_t slot,
+                              const FunctionCardEnhancement& enhancement) {
+    return registry.enhance(player,slot,enhancement);
+}
+EventPtr upgrade_shop(Player& p,unsigned amount) {
+    if(!amount||p.shopLevel>MAX_SHOP_LEVEL||amount>MAX_SHOP_LEVEL-p.shopLevel)
+        throw std::invalid_argument("Shop level limit reached");
+    auto e=std::make_unique<ShopLevelChangedEvent>();e->player=p.id;e->before=p.shopLevel;
+    p.shopLevel+=amount;e->after=p.shopLevel;return e;
+}
 EventPtr set_ability_counter(AbilityRef ability, CounterId counter, int& value, int replacement) {
     if (value == replacement) return {};
     auto e = std::make_unique<AbilityStateChangedEvent>();

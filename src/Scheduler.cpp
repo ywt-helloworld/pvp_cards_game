@@ -4,6 +4,7 @@
 #include <set>
 #include <stdexcept>
 #include <type_traits>
+#include <cmath>
 namespace cardgame {
 namespace {
 template<class E, class Fill> void emit(CardEffects& out, Fill fill) {
@@ -32,7 +33,8 @@ std::size_t Scheduler::index(Players p) {
 Scheduler::Scheduler(std::array<Player, 4> players, SchedulerConfig config)
     : players_(std::move(players)), config_(config), handler_(registry_, condition_, {}, 65536),
       random_(config.seed), cards_(standard_deck()) {
-    if (!config_.rounds || config_.shopTime.count() <= 0 ||
+    if (!std::isfinite(config_.consumableChance)||config_.consumableChance<0||config_.consumableChance>1||
+        !config_.rounds || config_.shopTime.count() <= 0 ||
         config_.turnTime.count() <= 0 || config_.choiceTime.count() <= 0)
         throw std::invalid_argument("Invalid scheduler configuration");
     if (config_.catalog.empty()) {
@@ -45,14 +47,46 @@ Scheduler::Scheduler(std::array<Player, 4> players, SchedulerConfig config)
                     const CoinValue coins=d%3==2?1:d%3==0?1:0;
                     return std::make_shared<ResourceBonusCard>(p,sequence,d,name,
                         pass?EventType::PassCommitted:EventType::PlayCommitted,score,coins);
-                }});
+                }, d<=6?1u:d<=8?2u:3u});
         }
+    }
+    if(config_.consumables.empty()) {
+        config_.consumables.push_back({1001,"货架扩容",4,"立即增加 1 个普通货位，本场保留",ExpandShopSlots{1}});
+        config_.consumables.push_back({1002,"商店升级",4,"商店等级 +1，后续出货解锁更高等级功能牌",UpgradeShop{1}});
+        FunctionCardEnhancement score;score.scoreDelta=1;
+        config_.consumables.push_back({1003,"数值强化",3,"指定功能牌的原有触发效果增加 1 分",EnhanceFunctionCard{score}});
+        FunctionCardEnhancement skill;
+        skill.skills.push_back({FunctionCards::listens_to({EventType::PassCommitted}),
+            [this](const Context& c,CardEffects& out) {
+                const auto* e=c.event_as<PlayerPassedEvent>();
+                if(e&&c.owner()&&e->player==*c.owner())out.emit(abilities::gain_coins(player(e->player),1,"added skill"));
+            },"新增技能：自己不出后 +1 金币"});
+        config_.consumables.push_back({1004,"技能强化",4,"指定功能牌新增「自己不出后 +1 金币」",EnhanceFunctionCard{skill}});
     }
     std::set<DefinitionId> definitions;
     for (const auto& definition:config_.catalog)
         if (!definition.id||definition.name.empty()||definition.price<0||!definition.create||
+            !definition.minimumShopLevel||definition.minimumShopLevel>MAX_SHOP_LEVEL||
             !definitions.insert(definition.id).second)
             throw std::invalid_argument("Invalid function-card catalog");
+    for(const auto& card:config_.consumables) {
+        if(!card.id||card.name.empty()||card.description.empty()||card.price<0||
+           !card.minimumShopLevel||card.minimumShopLevel>MAX_SHOP_LEVEL||!definitions.insert(card.id).second)
+            throw std::invalid_argument("Invalid consumable catalog");
+        std::visit([](const auto& effect) {
+            using T=std::decay_t<decltype(effect)>;
+            if constexpr(std::is_same_v<T,ExpandShopSlots>||std::is_same_v<T,UpgradeShop>) {
+                if(!effect.amount)throw std::invalid_argument("Empty consumable effect");
+            } else {
+                // 通用参数先检查，目标卡支持性在生成货架和购买时检查。
+                const auto& e=effect.enhancement;
+                if(e.scoreDelta<0||e.coinsDelta<0||(!e.scoreDelta&&!e.coinsDelta&&e.skills.empty()))
+                    throw std::invalid_argument("Empty or negative enhancement");
+                for(const auto& skill:e.skills)if(skill.subscriptions.none()||!skill.handler||skill.description.empty())
+                    throw std::invalid_argument("Invalid added skill");
+            }
+        },card.effect);
+    }
     for (std::size_t i = 0; i < 4; ++i)
         if (index(players_[i].id) != i) throw std::invalid_argument("Expected four ordered seats");
     first_ = static_cast<Players>(std::uniform_int_distribution<int>(0,3)(random_));
@@ -189,23 +223,98 @@ CardPtr Scheduler::make_card(Player& p, DefinitionId d) {
 }
 
 void Scheduler::fill_shop(Players p, bool refreshing, std::size_t firstSlot) {
-    auto& s = shops_[index(p)];
+    fill_offers(p,shops_[index(p)],refreshing,firstSlot,random_,sequence_);
+}
+std::size_t Scheduler::shop_slots(const Player& p) const {
+    const std::size_t base=p.facilities.count(2)?5:p.facilities.count(1)?4:3;
+    return std::min(MAX_SHOP_SLOTS,base+p.extraShopSlots);
+}
+const ConsumableCard& Scheduler::consumable(DefinitionId id) const {
+    const auto it=std::find_if(config_.consumables.begin(),config_.consumables.end(),[&](const auto& c){return c.id==id;});
+    if(it==config_.consumables.end())throw std::invalid_argument("Unknown consumable");
+    return *it;
+}
+std::vector<CardRef> Scheduler::consumable_targets(Players p,DefinitionId id) const {
+    const auto& c=consumable(id);std::vector<CardRef> targets;
+    if(!c.needs_target())return targets;
+    for(const auto& card:registry_.player_cards(p)) {
+        try { card->validate_enhancement(std::get<EnhanceFunctionCard>(c.effect).enhancement); }
+        catch(const std::exception&) { continue; }
+        targets.push_back(*card->reference());
+    }
+    return targets;
+}
+void Scheduler::validate_consumable(Players p,const ConsumableCard& card,std::optional<CardRef> target) const {
+    if(player(p).shopLevel<card.minimumShopLevel)throw std::logic_error("Shop level too low");
+    std::visit([&](const auto& effect) {
+        using T=std::decay_t<decltype(effect)>;
+        if constexpr(std::is_same_v<T,ExpandShopSlots>) {
+            if(target||effect.amount>MAX_SHOP_SLOTS-shop_slots(player(p)))throw std::logic_error("Shop slot limit reached");
+        } else if constexpr(std::is_same_v<T,UpgradeShop>) {
+            if(target||player(p).shopLevel>MAX_SHOP_LEVEL||effect.amount>MAX_SHOP_LEVEL-player(p).shopLevel)
+                throw std::logic_error("Shop level limit reached");
+        } else {
+            if(!target||target->owner!=p)throw std::invalid_argument("Choose your own enhancement target");
+            registry_.at(p,card_slot(*target))->validate_enhancement(effect.enhancement);
+        }
+    },card.effect);
+}
+void Scheduler::use_consumable(Players p,const ConsumableCard& card,std::optional<CardRef> target,CardEffects& out) {
+    validate_consumable(p,card,target);
+    std::visit([&](const auto& effect) {
+        using T=std::decay_t<decltype(effect)>;
+        if constexpr(std::is_same_v<T,ExpandShopSlots>) {
+            auto staged=shop(p);const auto before=staged.offers.size();
+            staged.offers.resize(before+effect.amount);
+            auto random=random_;auto sequence=sequence_;
+            fill_offers(p,staged,true,before,random,sequence);
+            out.emit(abilities::expand_shop_slots(p,effect.amount,[&](Players who,std::size_t amount,ShopSlotsChangedEvent& fact) {
+                fact.player=who;fact.before=before;fact.after=staged.offers.size();
+                shops_[index(who)]=std::move(staged);random_=random;sequence_=sequence;
+                player(who).extraShopSlots+=amount;return true;
+            }));
+        } else if constexpr(std::is_same_v<T,UpgradeShop>) {
+            out.emit(abilities::upgrade_shop(player(p),effect.amount));
+        } else out.emit(abilities::enhance_function_card(registry_,p,card_slot(*target),effect.enhancement));
+    },card.effect);
+}
+void Scheduler::fill_offers(Players p,ShopState& s,bool refreshing,std::size_t firstSlot,
+                            std::mt19937& random,std::uint64_t& sequence) {
     std::set<DefinitionId> used;
     for (const auto& card : registry_.player_cards(p)) used.insert(card->definition());
     for (std::size_t i = 0; i < s.offers.size(); ++i)
-        if (i < firstSlot || (s.locked && *s.locked == i) || (refreshing && !s.offers[i].id))
+        if (i < firstSlot || (s.locked && *s.locked == i) || (refreshing && !firstSlot && !s.offers[i].id))
             if (s.offers[i].id) used.insert(s.offers[i].definition);
     for (std::size_t i = 0; i < s.offers.size(); ++i) {
-        if (i < firstSlot || (s.locked && *s.locked == i) || (refreshing && !s.offers[i].id)) continue;
+        if (i < firstSlot || (s.locked && *s.locked == i) || (refreshing && !firstSlot && !s.offers[i].id)) continue;
         std::vector<DefinitionId> choices;
         for (const auto& definition:config_.catalog)
-            if (!used.count(definition.id)) choices.push_back(definition.id);
+            if (!used.count(definition.id)&&definition.minimumShopLevel<=player(p).shopLevel) choices.push_back(definition.id);
+        std::vector<const ConsumableCard*> consumables;
+        if(i>=2||choices.empty()) for(const auto& card:config_.consumables) {
+            if(used.count(card.id))continue;
+            if(const auto* expand=std::get_if<ExpandShopSlots>(&card.effect))
+                if(expand->amount>MAX_SHOP_SLOTS-s.offers.size())continue;
+            try {
+                if(card.needs_target()) {
+                    const auto targets=consumable_targets(p,card.id);
+                    if(targets.empty())continue;
+                    validate_consumable(p,card,targets.front());
+                } else validate_consumable(p,card,std::nullopt);
+            } catch(const std::exception&) { continue; }
+            consumables.push_back(&card);
+        }
+        if(!consumables.empty()&&(choices.empty()||std::bernoulli_distribution(config_.consumableChance)(random))) {
+            const auto& card=*consumables[std::uniform_int_distribution<std::size_t>(0,consumables.size()-1)(random)];
+            s.offers[i]={++sequence,card.id,card.price,card.name,ShopProductKind::Consumable,card.description,card.needs_target()};
+            used.insert(card.id);continue;
+        }
         if (choices.empty()) { s.offers[i] = {}; continue; }
-        const auto d = choices[std::uniform_int_distribution<std::size_t>(0,choices.size()-1)(random_)];
+        const auto d = choices[std::uniform_int_distribution<std::size_t>(0,choices.size()-1)(random)];
         used.insert(d);
         const auto definition=std::find_if(config_.catalog.begin(),config_.catalog.end(),
             [&](const auto& item){return item.id==d;});
-        s.offers[i] = {++sequence_, d, definition->price, definition->name};
+        s.offers[i] = {++sequence, d, definition->price, definition->name,ShopProductKind::FunctionCard,{}};
     }
 }
 void Scheduler::open_shops(CardEffects& out) {
@@ -215,7 +324,7 @@ void Scheduler::open_shops(CardEffects& out) {
         auto& s = shops_[index(p.id)];
         const auto old = s;
         s = {}; s.id = ++sequence_;
-        const std::size_t size = p.facilities.count(2) ? 5 : p.facilities.count(1) ? 4 : 3;
+        const std::size_t size = shop_slots(p);
         s.offers.resize(size);
         if (old.locked && *old.locked < size && *old.locked < old.offers.size()
             && old.offers[*old.locked].id) {
@@ -473,23 +582,34 @@ void Scheduler::process(const Context& c, CardEffects& out) {
             s.offers[static_cast<std::size_t>(e.slotId)].id!=e.productId)throw std::invalid_argument("Invalid shop product");
         const auto price=s.offers[static_cast<std::size_t>(e.slotId)].price;
         emit<BeforeShopPurchaseEvent>(out,[&](auto& x){x.actor=p;x.player=p;x.shopId=s.id;x.productId=e.productId;
-            x.settlementId=++sequence_;x.initialQuote={x.settlementId,price,price,version_};});break;
+            x.targetCard=e.targetCard;x.settlementId=++sequence_;x.initialQuote={x.settlementId,price,price,version_};});break;
     }
     case EventType::ShopBuyQuote: {
         const auto& e=*c.event_as<BeforeShopPurchaseEvent>();require_shop(e.player,e.shopId);
         auto& s=shops_[index(e.player)];auto it=std::find_if(s.offers.begin(),s.offers.end(),
             [&](const auto& offer){return offer.id==e.productId&&offer.id;});
         if(it==s.offers.end())throw std::logic_error("Product changed");
-        auto& p=player(e.player);std::size_t slot=0;
-        while(slot<p.functionSlots&&registry_.at(p.id,slot))++slot;
+        auto& p=player(e.player);
+        const auto product=*it;const auto offerSlot=static_cast<std::size_t>(it-s.offers.begin());
         const auto cost=out.shop().finalCost;
-        if(slot>=p.functionSlots||cost<0||p.coins<cost)throw std::logic_error("No slot or insufficient coins");
-        auto card=make_card(p,it->definition);const auto cardSeq=card->reference()->seq;
-        out.emit(abilities::equip_function_card(registry_,p,slot,std::move(card)));
-        out.emit(abilities::spend_coins(p,cost,"purchase"));paidCosts_[index(p.id)][cardSeq]=cost;
-        const auto offerSlot=static_cast<std::size_t>(it-s.offers.begin());
-        *it={};if(s.locked&&*s.locked==offerSlot)s.locked.reset();
-        emit<ShopPurchasedEvent>(out,[&](auto& x){x.player=p.id;x.shopId=s.id;x.productId=e.productId;x.paid=cost;});break;
+        if(cost<0||p.coins<cost)throw std::logic_error("Insufficient coins");
+        if(product.kind==ShopProductKind::Consumable) {
+            use_consumable(p.id,consumable(product.definition),e.targetCard,out);
+        } else {
+            if(e.targetCard)throw std::invalid_argument("Function card purchase does not take a target");
+            std::size_t slot=0;while(slot<p.functionSlots&&registry_.at(p.id,slot))++slot;
+            if(slot>=p.functionSlots)throw std::logic_error("Function slots full");
+            auto card=make_card(p,product.definition);const auto cardSeq=card->reference()->seq;
+            out.emit(abilities::equip_function_card(registry_,p,slot,std::move(card)));
+            paidCosts_[index(p.id)][cardSeq]=cost;
+        }
+        out.emit(abilities::spend_coins(p,cost,"purchase"));
+        s.offers[offerSlot]={};if(s.locked&&*s.locked==offerSlot)s.locked.reset();
+        emit<ShopPurchasedEvent>(out,[&](auto& x){x.player=p.id;x.shopId=s.id;x.productId=e.productId;x.paid=cost;});
+        if(product.kind==ShopProductKind::Consumable)
+            emit<ConsumableUsedEvent>(out,[&](auto& x){x.player=p.id;x.shopId=s.id;x.productId=e.productId;
+                x.definition=product.definition;x.targetCard=e.targetCard;});
+        break;
     }
     case EventType::SellFunctionCardRequest: {
         const auto& e=*c.event_as<SellFunctionCardRequest>();const auto p=actor();require_shop(p,e.shopId);
@@ -562,8 +682,7 @@ void Scheduler::process(const Context& c, CardEffects& out) {
         out.emit(abilities::spend_coins(value,cost,"facility"));
         if(e.facilityId==3||e.facilityId==4)abilities::grant_function_slot(value);
         if(e.facilityId==1||e.facilityId==2) {
-            const auto oldSize=s.offers.size();s.offers.resize(e.facilityId==1?4:5);
-            for(std::size_t i=oldSize;i<s.offers.size();++i)s.offers[i].id=++sequence_;
+            const auto oldSize=s.offers.size();s.offers.resize(shop_slots(value));
             fill_shop(p,true,oldSize);
         }
         s.facility=0;emit<FacilityPurchasedEvent>(out,[&](auto& x){x.player=p;x.facilityId=e.facilityId;});break;
@@ -678,6 +797,7 @@ void Scheduler::process(const Context& c, CardEffects& out) {
         if(std::all_of(newGameVotes_.begin(),newGameVotes_.end(),[](bool v){return v;})) {
             for(auto& p:players_) {
                 p.coins=6;p.score=0;p.hand.clear();p.upgrades.fill(0);p.facilities.clear();p.functionSlots=4;
+                p.extraShopSlots=0;p.shopLevel=1;
                 for(std::size_t slot=0;slot<MAX_FUNCTION_SLOTS;++slot)registry_.unequip(p.id,slot);
             }
             paidCosts_={};shops_={};continueVotes_.fill(std::nullopt);newGameVotes_.fill(false);
