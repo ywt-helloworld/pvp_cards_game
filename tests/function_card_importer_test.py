@@ -51,7 +51,7 @@ class ImporterTest(unittest.TestCase):
         with self.assertRaises(importer.CardError):importer.import_card(self.write(),self.root)
         self.assertEqual(before,self.files())
         importer.import_card(self.source,self.root,force=True)
-        self.assertIn('7LL+scoreBonus_',(self.root/'src/cards/generated/first_card.cpp').read_text())
+        self.assertIn('7LL+scoreBonus_',(self.root/'src/cards/generated/first_card.cpp').read_text(encoding='utf-8'))
         canonical=self.root/'cards/function/first_card.json'
         changed=json.loads(canonical.read_text(encoding='utf-8'));changed['id']=7999
         canonical.write_text(json.dumps(changed),encoding='utf-8');before=self.files()

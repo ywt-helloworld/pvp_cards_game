@@ -15,7 +15,7 @@ checks=importlib.util.module_from_spec(spec);spec.loader.exec_module(checks)
 class ChecksTest(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
-        self.root=Path(self.temp.name)
+        self.root=Path(self.temp.name).resolve()
         for name in ['tools/import_function_card.py','cards/function/steady_income.json',
                      'include/cards/generated/steady_income.hpp','src/cards/generated/steady_income.cpp','src/CardCatalog.cpp']:
             dest=self.root/name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(ROOT/name,dest)
