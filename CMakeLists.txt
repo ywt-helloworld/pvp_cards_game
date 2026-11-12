@@ -42,6 +42,8 @@ if(BUILD_TESTING)
         endif()
     endif()
     if(Python3_Interpreter_FOUND)
+        add_test(NAME PRCheckContracts COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/pr_checks_test.py)
         add_test(NAME FunctionCardImporter COMMAND ${Python3_EXECUTABLE}
             ${CMAKE_CURRENT_SOURCE_DIR}/tests/function_card_importer_test.py --compiler ${CMAKE_CXX_COMPILER})
         set_tests_properties(FunctionCardImporter PROPERTIES TIMEOUT 60)

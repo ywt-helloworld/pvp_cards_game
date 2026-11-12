@@ -5,7 +5,7 @@ import { createGateway } from '../server/server.mjs';
 import { resolve } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import assert from 'node:assert/strict';
-const executablePath=process.env.BROWSER_PATH||'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+const executablePath=process.env.BROWSER_PATH||(process.platform==='win32'?'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe':undefined);
 const app=process.env.TARGET_URL?null:await createGateway({port:0,engine:process.env.CARDGAME_ENGINE||resolve('../build/cardgame_server.exe'),shopTime:3600,turnTime:3600,seed:42});
 const url=process.env.TARGET_URL||`http://127.0.0.1:${app.address.port}`;
 const browser=await chromium.launch({executablePath,headless:true});

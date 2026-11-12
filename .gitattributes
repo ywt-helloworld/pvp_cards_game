@@ -1,0 +1,7 @@
+# Generated C++ and JSON are compared byte-for-byte by the PR checks.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary

@@ -1,6 +1,6 @@
 # 代码设计
 
-所有代码设计统一维护在根目录 `design.md`，后续的类定义、接口、事件协议、状态机、调度与联机实现说明都更新在此。游戏规则见 [README.md](README.md)，卡牌参考资料见 [设计调研](docs/function-card-research.md)。
+所有代码设计统一维护在根目录 `design.md`，后续的类定义、接口、事件协议、状态机、调度与联机实现说明都更新在此。快速规则见 [README.md](README.md)，完整规则与草案见 [详细规则](docs/game-rules.md)，卡牌参考资料见 [设计调研](docs/function-card-research.md)。
 
 当前已实现事件模型、Context / Condition、回调监听、62 个原子操作、玩家与功能牌、动态 Register、按牌缓冲的 HandleEvent，以及四人 TCP 原型服务器。玩家与系统功能牌共用同一条结算路径。默认卡池明确标记为 Demo，正式卡池可通过工厂接口替换；卡包、E 系列拓展牌与 U06 的业务尚待接入。
 
@@ -35,6 +35,7 @@
 - [11. 网页版与服务器部署](#11-网页版与服务器部署)
 - [12. 消耗牌与功能牌强化](#12-消耗牌与功能牌强化)
 - [13. JSON 功能牌导入工具](#13-json-功能牌导入工具)
+- [14. PR 自动检查](#14-pr-自动检查)
 
 ## 1. 总体架构
 
@@ -2068,3 +2069,15 @@ JSON `abilities` 数组中的每一项对应一个原子操作，指定 event、
 ### 13.4 验证
 
 `tests/function_card_importer_test.py` 覆盖真实文件导入、注册、重复导入、只读检查、强制更新、身份保护、非法输入、重复编号、手写文件保护、替换失败恢复，并用当前 C++ 编译器检查全部支持的事件/操作组合。`tests/JsonCards.test.cpp` 验证实际生成工厂、主体过滤、预览无资源副作用、同牌技能结算顺序、强化数值，以及默认商店生成和购买导入牌的完整路径。
+
+## 14. PR 自动检查
+
+操作教程见 [docs/pr-checks.md](docs/pr-checks.md)。`tools/check_pr.py` 是本地与 GitHub Actions 的统一入口，支持 native、web、all 三种检查集合；`.github/workflows/pr-checks.yml` 负责触发器、系统环境、日志留存和结果汇总。
+
+原生检查先核对文档本地文件链接、JSON 定义及生成头文件/实现/卡池的一致性，然后用独立的 `build/pr-checks` 目录执行 CMake Debug 构建和 CTest。生成代码检查为只读，发现不同步、缺失或孤立文件会失败，不替提交者自动修复。`.gitattributes` 统一文本为 LF，避免 Windows 与 Linux 逐字节核对时发生换行误报。`tests/pr_checks_test.py` 验证失同步、删除 JSON 和失效链接确实导致失败且不修复源文件。
+
+网页检查使用指定原生二进制，按锁文件安装 npm 依赖，构建并执行网关及真实浏览器测试。检查入口清除 TARGET_URL，确保测试只启动本地临时房间。Windows 使用本机 Edge 或 BROWSER_PATH；Linux runner 通过锁定的 playwright-core CLI 安装 Chromium，不使用 Windows 的浏览器路径。
+
+GitHub 工作流在 pull_request、main push 和 workflow_dispatch 时运行。矩阵包含 Ubuntu 22.04 和 Windows 2022；Windows 准备 MSVC 环境以支持 CMake 与 Python 中的编译器语法测试。Linux 额外执行 Node 20 和手机横屏浏览器场景。最终名为 PR checks 的作业仅在所有平台成功时返回成功，供需要时配置为必过状态检查。
+
+工作流采用只读 contents 权限，checkout 不保留凭据，Actions 固定提交 SHA，不引用项目 Secrets、不执行线上部署。相同 PR 的新提交取消旧运行；单个平台限时 20 分钟，汇总限时 2 分钟，测试日志与截图保留 7 天。分支保护、强制 PR 和人工审批属于独立仓库规则，本次工作流不修改它们。
