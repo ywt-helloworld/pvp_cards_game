@@ -6,9 +6,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 find_package(Threads REQUIRED)
 add_library(cardgame
     src/Condition.cpp src/Abilities.cpp src/FunctionCards.cpp src/Register.cpp
-    src/HandleEvent.cpp src/Player.cpp src/Poker.cpp src/SystemCards.cpp src/Scheduler.cpp
+    src/HandleEvent.cpp src/Player.cpp src/Poker.cpp src/SystemCards.cpp src/Scheduler.cpp src/CardCatalog.cpp
     src/network/ListenEvent.cpp src/network/Protocol.cpp src/network/Server.cpp)
 target_include_directories(cardgame PUBLIC include)
+file(GLOB CARDGAME_GENERATED_CARDS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/cards/generated/*.cpp")
+target_sources(cardgame PRIVATE ${CARDGAME_GENERATED_CARDS})
 target_link_libraries(cardgame PUBLIC Threads::Threads)
 if(WIN32)
     target_link_libraries(cardgame PUBLIC ws2_32)
@@ -22,7 +24,7 @@ add_executable(cardgame_server src/main.cpp)
 target_link_libraries(cardgame_server PRIVATE cardgame)
 include(CTest)
 if(BUILD_TESTING)
-    foreach(suite ListenEvent ContextCondition CardPipeline Consumables)
+    foreach(suite ListenEvent ContextCondition CardPipeline Consumables JsonCards)
         add_executable(test_${suite} tests/${suite}.test.cpp)
         target_link_libraries(test_${suite} PRIVATE cardgame)
         add_test(NAME ${suite} COMMAND test_${suite})
@@ -40,6 +42,9 @@ if(BUILD_TESTING)
         endif()
     endif()
     if(Python3_Interpreter_FOUND)
+        add_test(NAME FunctionCardImporter COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/tests/function_card_importer_test.py --compiler ${CMAKE_CXX_COMPILER})
+        set_tests_properties(FunctionCardImporter PROPERTIES TIMEOUT 60)
         add_test(NAME ServerProtocol
             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/server_smoke.py $<TARGET_FILE:cardgame_server>)
         set_tests_properties(ServerProtocol PROPERTIES TIMEOUT 30)

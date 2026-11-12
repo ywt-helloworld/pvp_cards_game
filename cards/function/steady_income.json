@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "type": "function",
+  "id": 2001,
+  "key": "steady_income",
+  "name": "稳健收益",
+  "price": 5,
+  "minimum_shop_level": 2,
+  "description": "自己出牌后获得 2 分和 1 金币；自己不出后获得 1 金币。",
+  "abilities": [
+    {
+      "event": "PlayCommitted",
+      "scope": "self",
+      "op": "add_score",
+      "amount": 2
+    },
+    {
+      "event": "PlayCommitted",
+      "scope": "self",
+      "op": "gain_coins",
+      "amount": 1
+    },
+    {
+      "event": "PassCommitted",
+      "scope": "self",
+      "op": "gain_coins",
+      "amount": 1
+    }
+  ]
+}

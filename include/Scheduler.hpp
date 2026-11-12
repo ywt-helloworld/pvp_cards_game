@@ -38,6 +38,7 @@ struct SchedulerConfig {
         CoinValue price = 0;
         FunctionCardFactory create;
         unsigned minimumShopLevel = 1;
+        std::string description{}; // 出货时可展示说明，无需提前实例化卡牌。
     };
     std::vector<CardDefinition> catalog; // 为空时使用明确标识为 Demo 的测试卡池。
     std::vector<ConsumableCard> consumables; // 为空时使用 Demo 消耗牌。

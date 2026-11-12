@@ -1,4 +1,5 @@
 #include "Scheduler.hpp"
+#include "CardCatalog.hpp"
 #include <algorithm>
 #include <numeric>
 #include <set>
@@ -49,6 +50,7 @@ Scheduler::Scheduler(std::array<Player, 4> players, SchedulerConfig config)
                         pass?EventType::PassCommitted:EventType::PlayCommitted,score,coins);
                 }, d<=6?1u:d<=8?2u:3u});
         }
+        for(auto& card:generated_function_cards())config_.catalog.push_back(std::move(card));
     }
     if(config_.consumables.empty()) {
         config_.consumables.push_back({1001,"货架扩容",4,"立即增加 1 个普通货位，本场保留",ExpandShopSlots{1}});
@@ -314,7 +316,7 @@ void Scheduler::fill_offers(Players p,ShopState& s,bool refreshing,std::size_t f
         used.insert(d);
         const auto definition=std::find_if(config_.catalog.begin(),config_.catalog.end(),
             [&](const auto& item){return item.id==d;});
-        s.offers[i] = {++sequence, d, definition->price, definition->name,ShopProductKind::FunctionCard,{}};
+        s.offers[i] = {++sequence, d, definition->price, definition->name,ShopProductKind::FunctionCard,definition->description};
     }
 }
 void Scheduler::open_shops(CardEffects& out) {
