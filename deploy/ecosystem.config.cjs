@@ -9,6 +9,8 @@ module.exports = {
     max_memory_restart: '180M',
     kill_timeout: 5000,
     env: {
+      // PM2 retains old environment values unless the ecosystem sets them.
+      RELEASE_ID: process.env.RELEASE_ID || 'development',
       NODE_ENV: 'production', HOST: '127.0.0.1', PORT: '3000',
       CARDGAME_ENGINE: '/var/www/cardgame/server/bin/cardgame_server',
       CLIENT_DIR: '/var/www/cardgame/client',

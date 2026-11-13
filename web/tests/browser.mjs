@@ -55,8 +55,8 @@ try {
   await p.screenshot({path:'../test-results/desktop-playing.png',fullPage:true});
   await p.setViewportSize({width:844,height:390});
   const playBounds=await p.locator('[data-do="play"]').boundingBox();
-  assert.ok(playBounds.y+playBounds.height<=390,'play controls remain inside landscape viewport');
   await p.screenshot({path:'../test-results/mobile-playing.png',fullPage:true});
+  assert.ok(playBounds.y+playBounds.height<=390,`play controls remain inside landscape viewport: ${JSON.stringify(playBounds)}`);
   const actor=await (async()=>{for(const page of pages)if(await page.getByRole('heading',{name:'轮到你出牌',exact:true}).count())return page;})();
   assert.ok(actor,'server selected an acting player');
   const selectedCard=actor.locator('.hand .poker:not(.joker)').first();

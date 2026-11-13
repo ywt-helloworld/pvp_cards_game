@@ -58,3 +58,6 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 @supports(padding:max(0px)){body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);padding-bottom:env(safe-area-inset-bottom)}}
 /* Keep the action row visible on short landscape screens. */
 @media(max-width:1000px) and (orientation:landscape) and (max-height:450px){.table{min-height:44px}.hand{min-height:89px}.hand-section{padding-top:5px}.shop-stage .card-emblem{width:30px;height:30px;font-size:23px}.shop-stage .card-face{gap:5px;padding:7px 5px}.shop-stage .card-lifetime{display:none}}
+/* Fix line boxes across Windows and Linux CJK font metrics. */
+:root{line-height:1.4}
+@media(max-width:1000px) and (orientation:landscape){.roomline{padding:3px 0}}

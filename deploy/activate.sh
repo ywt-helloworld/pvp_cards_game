@@ -29,7 +29,11 @@ rollback() {
   if [[ -n "$previous_client" ]]; then ln -sfn "$previous_client" "$base/client"; else unlink "$base/client" 2>/dev/null || true; fi
   if [[ -n "$previous_server" ]]; then ln -sfn "$previous_server" "$base/server"; else unlink "$base/server" 2>/dev/null || true; fi
   if [[ -f "$backup" ]]; then cp "$backup" "$config"; else unlink /etc/nginx/sites-enabled/cardgame 2>/dev/null || true; fi
-  if [[ -n "$previous_server" ]]; then pm2 startOrRestart "$base/ecosystem.config.cjs" --update-env; else pm2 delete cardgame-web 2>/dev/null || true; fi
+  if [[ -n "$previous_server" ]]; then
+    local previous_release
+    previous_release=$(basename "$(dirname "$previous_server")")
+    RELEASE_ID="$previous_release" pm2 startOrRestart "$base/ecosystem.config.cjs" --update-env
+  else pm2 delete cardgame-web 2>/dev/null || true; fi
   nginx -t && systemctl reload nginx
 }
 trap rollback ERR
@@ -40,11 +44,13 @@ cp "$target/nginx.conf" "$config"
 ln -sfn "$config" /etc/nginx/sites-enabled/cardgame
 nginx -t
 pm2 startOrRestart "$base/ecosystem.config.cjs" --update-env
+response=''
 for i in {1..30}; do
-  if curl -fsS http://127.0.0.1:3000/healthz 2>/dev/null; then break; fi
-  sleep 1
+  if response=$(curl -fsS http://127.0.0.1:3000/healthz 2>/dev/null) && [[ "$response" == *"\"version\":\"$release\""* ]]; then break; fi
+  sleep 0.3
 done
-curl -fsS http://127.0.0.1:3000/healthz
+[[ "$response" == *"\"version\":\"$release\""* ]]
+echo "$response"
 systemctl reload nginx
 # A successful reload signal precedes new workers accepting requests. Poll the
 # proxied health route instead of failing on a response from an old worker.
