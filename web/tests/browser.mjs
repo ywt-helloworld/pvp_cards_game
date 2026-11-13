@@ -27,9 +27,16 @@ try {
   }
   for(const p of pages)await p.getByRole('heading',{name:'局前商店',exact:true}).waitFor();
   const p=pages[0];
+  await p.setViewportSize({width:1440,height:900});
+  await p.screenshot({path:'../test-results/desktop-shop.png',fullPage:true});
+  await p.setViewportSize({width:844,height:390});
   await p.screenshot({path:'../test-results/mobile-shop.png',fullPage:true});
   await p.locator('.buy:enabled').first().click();await p.locator('.owned-card').waitFor();
   assert.match(await p.locator('.owned-card').textContent(),/自己.*后/);
+  const purchasedEffect=await p.locator('.owned-card small').first().textContent();
+  await p.locator('.owned-face').first().click();
+  assert.equal(await p.locator('#functionDescription').textContent(),purchasedEffect);
+  await p.locator('#closeFunction').click();
   if(app) {
     await pages[1].getByRole('button',{name:'购买并使用',exact:true}).click();
     await pages[1].waitForFunction(()=>document.querySelectorAll('.offers > *').length===4);
@@ -39,10 +46,33 @@ try {
   }
   for(const page of pages)await page.locator('[data-do="done"]').click();
   for(const page of pages)await page.locator('.hand .poker').first().waitFor();
+  assert.equal(await p.locator('.equipped-effect').first().textContent(),purchasedEffect,'purchased effect stays visible during play');
+  await p.locator('.equipped-card').first().click();
+  assert.equal(await p.locator('#functionDescription').textContent(),purchasedEffect);
+  await p.screenshot({path:'../test-results/mobile-card-detail.png',fullPage:true});
+  await p.locator('#closeFunction').click();
+  await p.setViewportSize({width:1440,height:900});
+  await p.screenshot({path:'../test-results/desktop-playing.png',fullPage:true});
+  await p.setViewportSize({width:844,height:390});
+  const playBounds=await p.locator('[data-do="play"]').boundingBox();
+  assert.ok(playBounds.y+playBounds.height<=390,'play controls remain inside landscape viewport');
   await p.screenshot({path:'../test-results/mobile-playing.png',fullPage:true});
   const actor=await (async()=>{for(const page of pages)if(await page.getByRole('heading',{name:'轮到你出牌',exact:true}).count())return page;})();
   assert.ok(actor,'server selected an acting player');
-  await actor.locator('.hand .poker:not(.joker)').first().click();
+  const selectedCard=actor.locator('.hand .poker:not(.joker)').first();
+  const originalHandCard=await selectedCard.elementHandle();
+  await selectedCard.click();
+  assert.equal(await selectedCard.getAttribute('aria-pressed'),'true');
+  assert.ok(await originalHandCard.evaluate(el=>el.isConnected),'selection preserves the hand DOM');
+  assert.match(await actor.locator('#selectionCount').textContent(),/已选 1 张/);
+  await actor.screenshot({path:'../test-results/mobile-selected.png',fullPage:true});
+  await selectedCard.click();
+  assert.equal(await selectedCard.getAttribute('aria-pressed'),'false');
+  await actor.emulateMedia({reducedMotion:'reduce'});
+  await selectedCard.click();
+  await actor.locator('[data-do="clear"]').click();
+  assert.equal(await selectedCard.getAttribute('aria-pressed'),'false');
+  await selectedCard.click();
   await actor.locator('[data-do="play"]').click();
   await actor.locator('.table-cards .poker').first().waitFor();
   // Card text on table must match the selected authoritative ID/rank mapping.
@@ -56,5 +86,5 @@ try {
   await portraitPage.screenshot({path:'../test-results/mobile-portrait.png',fullPage:true});
   assert.equal(errors.length,0,errors.join('\n'));
   assert.ok(websockets.length>=4,'four WebSocket connections upgraded');
-  console.log(JSON.stringify({ok:true,url,fourPlayers:true,buy:true,consumables:!!app,deal:true,play:true,reconnect:true,mobileLandscape:true,websocketConnections:websockets.length,consoleErrors:errors}));
+  console.log(JSON.stringify({ok:true,url,fourPlayers:true,buy:true,consumables:!!app,deal:true,play:true,reconnect:true,mobileLandscape:true,equippedEffects:true,cardDetails:true,selectionFeedback:true,reducedMotion:true,websocketConnections:websockets.length,consoleErrors:errors}));
 } finally {for(const context of contexts)await context.close();await browser.close();if(app)await app.close();}

@@ -33,6 +33,7 @@ function resetEntry(message) {
   state = null; joined = null; roster = null; selected.clear(); resumeToken = null;
   sessionStorage.removeItem('cardgame.session'); $('app').innerHTML = entry;
   if ($('choiceDialog').open) $('choiceDialog').close();
+  if ($('functionDialog').open) $('functionDialog').close();
   wireEntry(); if (message) $('joinError').textContent = message;
 }
 function remember(response) {
@@ -105,32 +106,42 @@ function poker(c, selectable = false) {
 }
 function cardFromId(id) { const r=Math.floor((id-1)/4)+3; return id>=53?{id,joker:true,suit:-1,rank:0}:{id,joker:false,suit:(id-1)%4,rank:r===15?2:r}; }
 const disabled = condition => condition?'disabled':'';
+const effectText = c => c.description || cardEffect(c.definition);
+const levelBadge = c => c.enhancementLevel ? `<span class="level-badge">强化 +${c.enhancementLevel}</span>` : '';
+function functionDock(g, me) {
+  return `<aside class="function-dock" aria-labelledby="functionHeading"><div class="dock-heading"><div><p class="eyebrow">YOUR BUILD</p><h3 id="functionHeading">我的功能牌</h3></div><span class="slot-count">${me.cards.length}/${g.self.functionSlots}</span></div><p class="dock-hint">自动生效 · 点击查看详情</p><div class="equipped-cards">${me.cards.length ? me.cards.map(c => `<button class="equipped-card" data-inspect="${c.seq}" aria-haspopup="dialog"><span class="equipped-top"><span class="card-symbol" aria-hidden="true">${suits[c.definition%4]}</span><span class="slot-number">槽位 ${c.slot+1}</span>${levelBadge(c)}</span><strong>${cardLabel(c)}</strong><span class="equipped-effect">${esc(effectText(c))}</span></button>`).join('') : '<div class="empty-build"><span aria-hidden="true">♧</span><p>还没有功能牌</p><small>下次商店购买后，效果会显示在这里。</small></div>'}</div></aside>`;
+}
+function handView(g, myTurn, blocked) {
+  return `<section class="hand-section"><div class="hand-heading"><span>你的手牌 <b>${g.hand.length}</b> 张 <span id="selectionCount" class="selection-count">已选 ${selected.size} 张</span></span><button class="quiet" data-do="clear">清空选择</button></div><div class="hand">${[...g.hand].sort((a,b)=>(a.joker?100:a.rank===2?15:a.rank)-(b.joker?100:b.rank===2?15:b.rank)||a.suit-b.suit).map(c=>poker(c,true)).join('')}</div><div class="actionbar"><button class="primary" data-do="play" ${disabled(blocked||!myTurn||!selected.size)}>出牌</button><button data-do="pass" ${disabled(blocked||!myTurn||!g.table.length)}>不出</button><button data-do="options" ${disabled(blocked||!selected.size||!!g.choice)}>查看方案</button><span class="action-hint">${g.choice?'请在弹窗确认出牌方案':myTurn?(g.table.length?'同型同张数，点数接大一档；2 / 炸弹按特殊规则。':'你领出，请选择手牌。'):'点击手牌预选，轮到你后出牌。'}</span></div>${g.preview.length?`<p class="preview muted">选牌方案：${g.preview.slice(0,8).map(m=>`${patterns[m.pattern]} ${rank(m.rank)}`).join(' / ')}${g.preview.length>8?` … 共 ${g.preview.length} 种`:''}</p>`:''}</section>`;
+}
 function renderGame() {
-  const g=state, me=g.players[g.seat], shop=g.shop, blocked=busy||!socket.connected;
+  const g=state, me=g.players[g.seat], blocked=busy||!socket.connected;
+  const handScroll=document.querySelector('.hand')?.scrollLeft||0;
+  const dockScroll=document.querySelector('.equipped-cards')?.scrollTop||0;
   const myTurn=g.phase==='playing'&&g.acting===g.seat&&!g.choice;
   const heading=g.phase==='shopping'?'局前商店':g.phase==='finished'?'本场结束':g.acting===g.seat?'轮到你出牌':`等待 ${g.players[g.acting].name} 出牌`;
   $('app').innerHTML=`<section class="game"><div class="roomline"><span>房间 <b>${esc(g.room||joined?.room)}</b> <button class="quiet" data-do="copy">邀请</button></span><span>第 ${g.round} 局 · ${g.phase==='shopping'?'并行购物':'逆时针出牌'} · 牌堆 ${g.deck} 张</span><span>测试版 · Demo 卡池</span></div><div class="players">${g.players.map(p=>`<div class="player ${p.seat===g.seat?'mine':''} ${g.phase==='playing'&&p.seat===g.acting?'acting':''}"><div class="player-name"><span>P${p.seat+1} ${esc(p.name)} ${p.seat===g.seat?'· 你':''}</span><small>${p.connected?'在线':'离线'}</small></div><div class="player-stats"><span>分数 ${p.score??'—'}</span><span>金币 ${p.coins??'—'}</span><span>手牌 ${p.handCount}</span></div><div class="player-cards">${p.cards.length?p.cards.map(c=>cardLabel(c)).join(' · '):g.phase==='shopping'&&p.seat!==g.seat?'购物信息私密':'暂无功能牌'}</div></div>`).join('')}</div>
-    <section class="stage"><div class="stage-heading"><h2>${esc(heading)}</h2>${g.phase!=='finished'?'<span class="timer" id="timer"></span>':''}</div>
+    <div class="${g.phase==='playing'?'play-layout':'phase-layout'}"><div class="play-main"><section class="stage ${g.phase==='shopping'?'shop-stage':''}"><div class="stage-heading"><div>${g.phase==='shopping'?'<p class="eyebrow">THE CARD SHOP</p>':''}<h2>${esc(heading)}</h2></div>${g.phase!=='finished'?'<span class="timer" id="timer"></span>':''}</div>
     ${g.phase==='shopping'?shopView(g,me,blocked):g.phase==='finished'?results(g):`<div class="table"><div class="table-label">${g.table.length?`桌面 · ${patterns[g.lastPlay[0]?.pattern]||''} ${g.lastPlay[0]?rank(g.lastPlay[0].rank):''}`:'新一巡 · 当前玩家领出'}</div><div class="table-cards">${g.table.map(id=>poker(cardFromId(id))).join('')}</div>${g.lastPlay[0]?.wildcards.length?`<div class="muted">${wildcards(g.lastPlay[0])}</div>`:''}</div>`}</section>
-    ${g.phase==='playing'?`<section class="hand-section"><div class="hand-heading"><span>你的手牌 · ${g.hand.length} 张 · 已选 ${selected.size} 张</span><button class="quiet" data-do="clear">清空选择</button></div><div class="hand">${[...g.hand].sort((a,b)=>(a.joker?100:a.rank===2?15:a.rank)-(b.joker?100:b.rank===2?15:b.rank)||a.suit-b.suit).map(c=>poker(c,true)).join('')}</div><div class="actionbar"><button class="primary" data-do="play" ${disabled(blocked||!myTurn||!selected.size)}>出牌</button><button data-do="pass" ${disabled(blocked||!myTurn||!g.table.length)}>不出</button><button data-do="options" ${disabled(blocked||!selected.size||!!g.choice)}>查看方案</button><span class="action-hint">${g.choice?'请在弹窗确认出牌方案':myTurn?(g.table.length?'同型同张数，点数接大一档；2 / 炸弹按特殊规则。':'你领出，请选择手牌。'):'点击手牌预选，轮到你后出牌。'}</span></div><div class="personal-effects">${me.cards.map(c=>`<span class="effect-tag">${cardLabel(c)} · ${esc(c.description||cardEffect(c.definition))}</span>`).join('')}</div>${g.preview.length?`<p class="muted">选牌方案：${g.preview.slice(0,8).map(m=>`${patterns[m.pattern]} ${rank(m.rank)}`).join(' / ')}${g.preview.length>8?` … 共 ${g.preview.length} 种`:''}</p>`:''}</section>`:''}</section>`;
+    ${g.phase==='playing'?handView(g,myTurn,blocked):''}</div>${g.phase==='playing'?functionDock(g,me):''}</div></section>`;
+  if(document.querySelector('.hand')) document.querySelector('.hand').scrollLeft=handScroll;
+  if(document.querySelector('.equipped-cards')) document.querySelector('.equipped-cards').scrollTop=dockScroll;
   updateTimer();
 }
 const facilityInfo = [null,['货架扩展 I','普通货位增至 4',18],['货架扩展 II','普通货位增至 5',30],['功能槽 I','增加 1 个功能槽',20],['功能槽 II','再增加 1 个功能槽',35],['加强折扣','每次商店首次加强少 2 金币',14],null,['刷新折扣','每次商店首次付费刷新少 1 金币',12],['出售加成','出售返还购入价的 60%',12]];
 function offerView(g,me,off,o) {
-  if(!o.product) return '<div class="empty-offer">货位已空</div>';
+  if(!o.product) return '<div class="empty-offer"><span aria-hidden="true">✦</span><strong>已售出</strong><small>刷新商店补充新牌</small></div>';
   const consumable=o.kind==='consumable', targets=o.targets||[];
   const unavailable=off||me.coins<o.price||(!consumable&&me.cards.length>=g.self.functionSlots)||(o.needsTarget&&!targets.length);
-  return `<article class="function-card ${o.locked?'locked':''}"><strong>${cardLabel(o)} ${o.locked?'· 已锁':''}</strong>
-    <div class="effect">${esc(o.description||cardEffect(o.definition))}</div>
-    ${consumable?'<small>消耗牌 · 购买即使用</small>':''}
+  return `<article class="function-card ${consumable?'consumable':''} ${o.locked?'locked':''}"><div class="card-type"><span>${consumable?'消耗牌':'功能牌'}</span><span>${o.locked?'已锁定':`NO. ${String(o.definition).padStart(2,'0')}`}</span></div><button class="card-face" data-offer="${o.slot}" aria-haspopup="dialog"><span class="card-emblem" aria-hidden="true">${consumable?'✦':suits[o.definition%4]}</span><strong>${cardLabel(o)}</strong><span class="effect">${esc(effectText(o))}</span><span class="card-lifetime">${consumable?'购买即生效':'放入槽位 · 持续生效'}</span></button>
     ${o.needsTarget?`<label class="target-label">强化目标<select data-target-product="${o.product}" aria-label="${esc(o.name)}的强化目标"><option value="">请选择功能牌</option>${targets.map(seq=>{const c=me.cards.find(c=>c.seq===seq);return `<option value="${seq}" ${enhancementTargets.get(o.product)===seq?'selected':''}>槽 ${(c?.slot??0)+1} · ${cardLabel(c)} +${c?.enhancementLevel??0}</option>`;}).join('')}</select></label>`:''}
-    <div class="price">${o.price} <small>金币</small></div><div class="card-actions"><button class="buy" data-do="buy" data-slot="${o.slot}" ${disabled(unavailable)}>${consumable?'购买并使用':'购买'}</button><button data-do="${o.locked?'unlock':'lock'}" data-slot="${o.slot}" ${disabled(off)}>${o.locked?'解锁':'锁定'}</button></div></article>`;
+    <div class="card-bottom"><div class="price">${o.price} <small>金币</small></div><div class="card-actions"><button class="buy" data-do="buy" data-slot="${o.slot}" ${disabled(unavailable)}>${consumable?'购买并使用':'购买'}</button><button class="lock-button" data-do="${o.locked?'unlock':'lock'}" data-slot="${o.slot}" ${disabled(off)}>${o.locked?'解锁':'锁定'}</button></div></div></article>`;
 }
 function shopView(g,me,blocked) {
   const s=g.shop, off=blocked||s.done, fs=g.self.facilities;
   const refresh=Math.max(s.freeRefreshes?0:1,s.freeRefreshes?0:2+s.paidRefreshes-(fs.includes(7)&&!s.refreshDiscountUsed?1:0));
   const facility=facilityInfo[s.facility];
-  return `<div class="shop-layout"><div><p class="muted">商店 Lv.${g.self.shopLevel??1} · ${s.offers.length}/6 货位 · 金币 ${me.coins}。消耗牌购买即生效。</p><div class="offers" style="margin-top:10px">${s.offers.map(o=>offerView(g,me,off,o)).join('')}</div><div class="shop-operations"><button data-do="refresh" ${disabled(off||s.refreshes>=5||me.coins<refresh)}>刷新 ${refresh} 金币 (${s.refreshes}/5)</button><button class="primary" data-do="done" ${disabled(off)}>${s.done?'已结束，等待其他玩家':'结束购物'}</button></div><p class="fineprint">锁定货位保留到下局；刷新不会影响锁定货位。全部结束或倒计时归零后发牌。</p></div><div><div class="section-label">你的功能牌 ${me.cards.length}/${g.self.functionSlots}</div><div class="inventory">${me.cards.length?me.cards.map(c=>`<div class="owned-card">${cardLabel(c)}${c.enhancementLevel?` +${c.enhancementLevel}`:''}<small>${esc(c.description||cardEffect(c.definition))}</small><button data-do="sell" data-seq="${c.seq}" ${disabled(off)}>出售</button></div>`).join(''):'<p class="muted">买一张功能牌试试。</p>'}</div><div class="section-label">牌型加强 · 基础奖励倍数提升</div><div class="upgrades">${patterns.map((p,i)=>{const level=g.self.upgrades[i],cost=Math.max(1,[4,6,8,10,10][i]*(level+1)-(fs.includes(5)&&!s.upgradeDiscountUsed?2:0));return `<button class="upgrade" data-do="upgrade" data-pattern="${i}" ${disabled(off||level>=4||me.coins<cost)}>${p} · ${level+1} 倍<span>${level>=4?'已满级':`加强 ${cost} 金币`}</span></button>`;}).join('')}</div>${facility?`<div class="facility">设施：${facility[0]}<br><span class="muted">${facility[1]}</span><button data-do="facility" ${disabled(off||me.coins<facility[2])}>购买 ${facility[2]} 金币</button></div>`:''}${fs.length?`<p class="fineprint">已有设施：${fs.map(id=>facilityInfo[id]?.[0]||`U${id}`).join('、')}</p>`:''}</div></div>`;
+  return `<div class="shop-layout"><div class="shop-shelf"><div class="shop-summary"><p class="muted">商店 Lv.${g.self.shopLevel??1} · ${s.offers.length}/6 货位</p><div class="wallet"><small>可用金币</small><strong>${me.coins}</strong></div></div><div class="offers">${s.offers.map(o=>offerView(g,me,off,o)).join('')}</div><div class="shop-operations"><button data-do="refresh" ${disabled(off||s.refreshes>=5||me.coins<refresh)}>↻ 刷新 <b>${refresh}</b> 金币 <small>(${s.refreshes}/5)</small></button><button class="primary" data-do="done" ${disabled(off)}>${s.done?'已结束，等待其他玩家':'结束购物'} <span aria-hidden="true">→</span></button></div><p class="fineprint">锁定的牌保留到下局。全部结束或倒计时归零后发牌。</p></div><div class="shop-workbench"><div class="section-label">你的功能牌 <span>${me.cards.length}/${g.self.functionSlots}</span></div><div class="inventory">${me.cards.length?me.cards.map(c=>`<article class="owned-card"><button class="owned-face" data-inspect="${c.seq}" aria-haspopup="dialog"><strong>${cardLabel(c)}</strong>${levelBadge(c)}<small>${esc(effectText(c))}</small></button><button class="sell-button" data-do="sell" data-seq="${c.seq}" ${disabled(off)}>出售</button></article>`).join(''):'<div class="inventory-empty"><span aria-hidden="true">♧</span><p>给你的打法加一点变化。</p><small>购买的功能牌会在对局中持续展示。</small></div>'}</div><div class="section-label">牌型加强 <small>提升基础奖励倍数</small></div><div class="upgrades">${patterns.map((p,i)=>{const level=g.self.upgrades[i],cost=Math.max(1,[4,6,8,10,10][i]*(level+1)-(fs.includes(5)&&!s.upgradeDiscountUsed?2:0));return `<button class="upgrade" data-do="upgrade" data-pattern="${i}" ${disabled(off||level>=4||me.coins<cost)}><strong>${p}</strong><b>×${level+1}</b><span>${level>=4?'已满级':`加强 ${cost} 金币`}</span></button>`;}).join('')}</div>${facility?`<div class="facility"><div><strong>${facility[0]}</strong><p class="muted">${facility[1]}</p></div><button data-do="facility" ${disabled(off||me.coins<facility[2])}>购买 ${facility[2]} 金币</button></div>`:''}${fs.length?`<p class="fineprint">已有设施：${fs.map(id=>facilityInfo[id]?.[0]||`U${id}`).join('、')}</p>`:''}</div></div>`;
 }
 function results(g) {
   return `<div class="result"><p class="eyebrow">本场结算</p><h2>${g.winners.map(i=>esc(g.players[i].name)).join('、')} 获胜</h2><table class="scoreboard">${[...g.players].sort((a,b)=>b.score-a.score).map((p,i)=>`<tr><td>${i+1}</td><td>${esc(p.name)}</td><td>${p.score} 分</td><td>${p.coins} 金币</td></tr>`).join('')}</table><p class="muted">四人选择一致后继续。投票会保留到大家作出决定。</p><div class="shop-operations" style="justify-content:center"><button data-do="extra" ${disabled(busy)}>加赛 3 局</button><button data-do="endless" ${disabled(busy)}>无尽模式</button><button class="primary" data-do="new" ${disabled(busy)}>重新开始</button></div></div>`;
@@ -147,13 +158,39 @@ function renderChoice() {
 }
 function updateTimer() { if($('timer')) $('timer').textContent=`${Math.max(0,Math.ceil((deadline-Date.now())/1000))} 秒`; }
 setInterval(updateTimer,250);
+
+// Keep the hand, keyboard focus and scroll position intact when selecting cards.
+function updateSelection() {
+  for(const card of document.querySelectorAll('[data-card]')) {
+    const on=selected.has(Number(card.dataset.card));
+    card.classList.toggle('selected',on); card.setAttribute('aria-pressed',String(on));
+  }
+  if(!$('selectionCount')||!state) return;
+  $('selectionCount').textContent=`已选 ${selected.size} 张`;
+  const blocked=busy||!socket.connected;
+  document.querySelector('[data-do="play"]').disabled=blocked||state.acting!==state.seat||!!state.choice||!selected.size;
+  document.querySelector('[data-do="options"]').disabled=blocked||!selected.size||!!state.choice;
+}
+function showCardDetails(c, isOffer=false) {
+  if(!c) return;
+  $('functionTitle').textContent=c.name&&!/^Demo card \d+$/.test(c.name)?c.name:cardName(c.definition);
+  $('functionKind').textContent=c.kind==='consumable'?'消耗牌 · 购买即生效':`功能牌${c.enhancementLevel?` · 强化 +${c.enhancementLevel}`:''}`;
+  $('functionDescription').textContent=effectText(c);
+  $('functionNote').textContent=isOffer?`售价 ${c.price} 金币 · ${c.kind==='consumable'?'使用后不占功能槽':'购买后放入功能槽'}`:'已装备 · 按说明的触发条件自动结算，强化后的数值已包含在说明中。';
+  if(!$('functionDialog').open) $('functionDialog').showModal();
+}
 document.addEventListener('click', async e => {
   const card=e.target.closest('[data-card]');
   if(card) {
-    const scroll=card.parentElement.scrollLeft, id=Number(card.dataset.card);
-    selected.has(id)?selected.delete(id):selected.add(id); renderGame();
-    document.querySelector('.hand').scrollLeft=scroll; return;
+    const id=Number(card.dataset.card);
+    selected.has(id)?selected.delete(id):selected.add(id); updateSelection();
+    if(!matchMedia('(prefers-reduced-motion: reduce)').matches) card.animate([{scale:'.94'},{scale:'1.025'},{scale:'1'}],{duration:210,easing:'ease-out'});
+    return;
   }
+  const inspect=e.target.closest('[data-inspect]');
+  if(inspect&&state) {showCardDetails(state.players[state.seat].cards.find(c=>c.seq===Number(inspect.dataset.inspect)));return;}
+  const offer=e.target.closest('[data-offer]');
+  if(offer&&state?.shop) {showCardDetails(state.shop.offers[Number(offer.dataset.offer)],true);return;}
   const choice=e.target.closest('[data-choice]');
   if(choice&&state?.choice) { await action({kind:'choose',choice:state.choice.id,option:Number(choice.dataset.choice)}); renderChoice(); return; }
   const page=e.target.closest('[data-page]'); if(page) {choicePage+=Number(page.dataset.page);renderChoice();return;}
@@ -164,7 +201,7 @@ document.addEventListener('click', async e => {
     try{await navigator.clipboard.writeText(url);toast('邀请链接已复制');}
     catch {toast(`房间号：${state?.room||joined?.room||roster?.room}，分享地址栏网址和房间号即可`);} return;
   }
-  if(kind==='clear') {selected.clear();renderGame();return;}
+  if(kind==='clear') {selected.clear();updateSelection();return;}
   if(!state) return;
   const g=state, shop=g.shop?.id, data={kind,shop};
   if(['buy','lock','unlock'].includes(kind)) {
@@ -184,6 +221,7 @@ document.addEventListener('click', async e => {
 });
 $('rulesButton').onclick=()=>$('rules').showModal(); $('closeRules').onclick=()=>$('rules').close();
 $('choiceDialog').addEventListener('cancel',e=>e.preventDefault());
+$('closeFunction').onclick=()=>$('functionDialog').close();
 $('fullscreen').onclick=async()=>{try{if(!document.fullscreenElement){await document.documentElement.requestFullscreen();await screen.orientation?.lock?.('landscape').catch(()=>{});}else await document.exitFullscreen();}catch{toast('此浏览器请手动横屏使用');}};
 wireEntry(); socket.connect();
 
