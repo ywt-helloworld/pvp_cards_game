@@ -2106,6 +2106,6 @@ GitHub 工作流在 pull_request、main push 和 workflow_dispatch 时运行。�
 
 系统流程摘要把 `TurnStart` 的断线自动超时分支视为经过源码审查的有限进度边界，不将这一分支作为无限卡牌反馈边。该假设依赖既有的有限手牌、巡末摸牌和局数推进，由完整对局测试和运行时预算继续保护；改变进度假设的手写技能必须重新审查该摘要。检查不分析技能回调内部的任意 while 循环，无法证明任意 C++ 程序不存在死循环。
 
-`tests/effect_cycles_test.py` 在隔离目录构造自循环、双牌及三牌组合、JSON/原生组合和系统资源中转等坏设计，验证检查失败且不修改定义；同时验证合法汇合、快照操作、源码覆盖变更、换行兼容和 CLI 失败退出码。CTest 注册 `EffectCycleContracts`，现有本地检查入口在构建前执行设计检查。
+`tests/effect_cycles_test.py` 在隔离目录构造自循环、双牌及三牌组合、JSON/原生组合和系统资源中转等坏设计，验证检查失败且不修改定义；同时验证合法汇合、快照操作、源码覆盖变更、换行兼容和 CLI 失败退出码。当前保留为手动执行的独立测试，未注册到 CTest 或现有本地检查入口。
 
-GitHub Actions 新增独立的 `Effect design safety` 作业，运行卡池检查及其回归测试；汇总 `PR checks` 同时要求平台矩阵和此作业全部成功。无需改动线上运行代码或部署服务器。逐步代码说明与维护方法见 [docs/effect-cycle-checks.md](docs/effect-cycle-checks.md)。
+按维护者要求，已撤下 `Effect design safety` 的自动执行与汇总依赖，保留检查脚本、测试及效果声明，等待维护者亲自发布工作流。现有 `PR checks` 仍只汇总原有平台矩阵。无需改动线上运行代码或部署服务器。逐步代码说明与维护方法见 [docs/effect-cycle-checks.md](docs/effect-cycle-checks.md)。

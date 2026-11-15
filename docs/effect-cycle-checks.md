@@ -1,6 +1,6 @@
 # 功能牌效果循环检查
 
-目的：提交代码时，拒绝可能不断自动触发的卡牌设计，不必先启动游戏碰到该组合。入口是 [检查脚本](../tools/check_effect_cycles.py)，独立的 GitHub Actions 作业叫 **Effect design safety**，结果也纳入 **PR checks**。
+目的：提交代码时，拒绝可能不断自动触发的卡牌设计，不必先启动游戏碰到该组合。入口是 [检查脚本](../tools/check_effect_cycles.py)。脚本和测试已保留，当前未启用 GitHub 自动执行，等待维护者手动发布工作流。
 
 ## 1. 从技能得到事件连线
 
@@ -69,4 +69,4 @@ python tests/effect_cycles_test.py
 
 第一条检查当前卡池；第二条在临时目录构造坏设计，验证它们确实被拒绝，同时验证正常设计可以通过。当前回归覆盖自循环、两牌和三牌组合、JSON 与手写牌组合、系统资源请求中转、正常汇合、快照修改、新操作遗漏、C++ 源码变化和 CLI 的非零退出码。
 
-`python tools/check_pr.py --suite native` 和完整检查也会执行设计检查，CTest 中还会显示 `EffectCycleContracts`。新建或更新 PR、向 main 推送会自动运行 **Effect design safety**；该作业失败时，汇总 **PR checks** 也失败。此流程不更新线上游戏实例。
+当前 `tools/check_pr.py`、CTest 和既有 GitHub 工作流均未接入此检查。手动发布时，在 `.github/workflows/` 中添加 YAML 工作流，配置 PR、main 推送等触发器，并运行上面两条命令。GitHub 根据工作流文件自动执行检查；仅保存检查脚本不会启用自动执行。此流程不更新线上游戏实例。

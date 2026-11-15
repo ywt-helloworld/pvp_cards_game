@@ -14,23 +14,6 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  effect_design:
-    name: Effect design safety
-    runs-on: ubuntu-22.04
-    timeout-minutes: 3
-    steps:
-      - name: Check out the submitted code
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Set up Python
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
-        with:
-          python-version: '3.12'
-      - name: Reject cyclic card designs
-        run: python tools/check_effect_cycles.py
-      - name: Verify unsafe designs really fail
-        run: python tests/effect_cycles_test.py
 
   checks:
     name: Checks (${{ matrix.os }})
@@ -83,12 +66,11 @@ jobs:
   required:
     name: PR checks
     if: always()
-    needs: [checks, effect_design]
+    needs: checks
     runs-on: ubuntu-22.04
     timeout-minutes: 2
     steps:
       - name: Require every platform to pass
         env:
           CHECK_RESULT: ${{ needs.checks.result }}
-          EFFECT_RESULT: ${{ needs.effect_design.result }}
-        run: test "$CHECK_RESULT" = success && test "$EFFECT_RESULT" = success
+        run: test "$CHECK_RESULT" = success

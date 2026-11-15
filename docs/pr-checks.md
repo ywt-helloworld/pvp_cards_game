@@ -68,13 +68,12 @@ on:
 |---|---|
 | 文档本地链接 | README、design 和 docs 引用的本地文件必须存在；不访问外部链接，也不验证 Markdown 锚点 |
 | JSON 与生成文件 | 严格验证卡牌 JSON，检查头文件、实现、卡池注册是否同步，检测已删除 JSON 对应的残留生成文件；不自动修复 PR |
-| 效果连锁设计 | 合并卡池的事件输入与输出，拒绝潜在自循环和组合循环；手写效果摘要绑定源码，详见 [循环检查](effect-cycle-checks.md) |
 | Linux / Windows 原生构建 | 使用 CMake Debug 编译服务器；Debug 保留 C++ 测试断言 |
 | CTest | 事件、上下文、完整对局、消耗牌、JSON 工厂、导入工具、检查入口和原生 TCP 测试 |
 | 网页构建与网关 | 按 package-lock 安装依赖，打包网页，测试鉴权、状态隔离、重连和即时消耗牌 |
 | 浏览器联机 | 四位玩家入座、购卡、使用消耗牌、发牌、出牌、刷新重连与手机横屏 |
 
-Linux 跑原生和网页检查，Windows 跑原生检查，独立的 **Effect design safety** 作业检查卡牌连锁设计；最后汇总为固定名称的 **PR checks**。任一平台或效果设计作业失败、取消或未成功，汇总检查都不会显示通过。更新同一 PR 时，旧的未完成检查会取消。
+Linux 跑原生和网页检查，Windows 跑原生检查；最后汇总为固定名称的 **PR checks**。任一平台失败、取消或未成功，汇总检查都不会显示通过。更新同一 PR 时，旧的未完成检查会取消。
 
 工作流仅申请 `contents: read`，不部署、不写入仓库、不使用项目密钥。Actions 固定到经过核对的提交 SHA。测试日志和截图作为 artifacts 保留 7 天。[GitHub Token 权限说明](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token)
 

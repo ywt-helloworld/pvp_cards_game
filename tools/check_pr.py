@@ -50,8 +50,6 @@ def check_generated_cards():
     print(f'JSON/generated C++ consistency: passed ({len(definitions)} card definitions)', flush=True)
 
 
-def check_effect_cycles():
-    run([sys.executable, ROOT/'tools/check_effect_cycles.py'])
 
 
 def native(args, build):
@@ -114,7 +112,7 @@ def main():
         if args.jobs<1:raise ValueError('--jobs must be positive')
         build = (ROOT/args.build_dir).resolve()
         if not build.is_relative_to(ROOT):raise ValueError('--build-dir must stay inside the project')
-        check_effect_cycles();check_documents();check_generated_cards()
+        check_documents();check_generated_cards()
         if args.suite in ('native','all'):native(args,build)
         if args.suite in ('web','all'):web(args,build)
     except (ValueError,OSError,subprocess.CalledProcessError) as e:
