@@ -1,0 +1,398 @@
+{
+  "version": 1,
+  "source_sha256": {
+    "include/Abilities.hpp": "bbbce44cba8928a7c71bdc4ef4633a94f93584a4c4c0498b8dbf1dae77f9f081",
+    "include/CardCatalog.hpp": "e6b13be335881b7d3d175467243d6e898d2c096fd73eff6adabf5dc4686acb26",
+    "include/Common/enums.hpp": "521c2a174e5dfa1a294673d1fb5bc63f999ce2a55f889c1074c93775f03888dd",
+    "include/Common/network_types.hpp": "3ed75f0afff7dfa092d83d5e62f7ddeed45262d0985a095f6ee919d649df476f",
+    "include/Common/types.hpp": "80b1082107abd7fd7054ff32c50ec5c040a4e99a00e92c573308b0e04689d469",
+    "include/Condition.hpp": "2d1b3c01e63c68b25a1229607406d8189444607329a69ab0847fc52af4f1ed2d",
+    "include/ConsumableCards.hpp": "32388658e0e176db222c63fb3576f5bb9267f6fd5eb10ad6cd917c8b67a77e7d",
+    "include/Context.hpp": "8d07d58598d7858876a23a4bb6d43f5bb821e4c838c6e4e9177e1c2dc02d15ca",
+    "include/Event.hpp": "258f113a852d326a8f546f33c9ae190a7b8ab9569afbe178bc8393aa7adaf8bc",
+    "include/FunctionCards.hpp": "ed85f466fffbb8819edd1da0e6d1d4bd529bfe9fd0c5101224922e5545315323",
+    "include/HandleEvent.hpp": "f7cb1b5539c455fb2b8ec0e575a71e9ca79219602fb9388ac2499131d3ceb04d",
+    "include/Player.hpp": "38d86bf1409782d7760b05840c6d316277b7715d0075786efcb650e1a81d1963",
+    "include/Poker.hpp": "ee6cc5af2fa3691e25dd2908a580e31c2733bf45533022493f67c6e262ac1c6d",
+    "include/Register.hpp": "199edc1d1f1d8e2c405884d064b3d550218bdeb9164a40d6caf71fe270244ecf",
+    "include/Scheduler.hpp": "10f52676ce793af299616a73a3bc971920f8b6ba3bb76c77772bacfe628ac1ed",
+    "include/SystemCards.hpp": "8eca5a7be5243db6bbdab927681a7fddd0eb3fdcc8d942e3a097c94fbb183769",
+    "include/network/ListenEvent.hpp": "771edaa44ec720aaa4744741d6496826e05ad4623507e1daa02459c2fe3a23d3",
+    "include/network/Protocol.hpp": "424d95f3a1b25111b223ed9f28652c8d5a2edbbe2a1396c85177c20bb5ab05dc",
+    "include/network/Server.hpp": "216fbed71a85cba784c74c07e9f2e54264df81e425bb8fd23da46f384c053a66",
+    "src/Abilities.cpp": "226b0fb6668576b1915901087fc0f15167223f0c0ef087107da060577ab86645",
+    "src/CardCatalog.cpp": "0812f1f161a1910c6e759534c1cb76d9c705a74495b26b2c5b215e4fe4176587",
+    "src/Condition.cpp": "5a2847b03f2ed242271746bc8da6229a682a636d2a900556174a2c0cb90e9e40",
+    "src/FunctionCards.cpp": "cac1a62ed36aafc5ec5f8929d1c45b921a6b1d7b0691cd7685b721f606ebead2",
+    "src/HandleEvent.cpp": "d30831571e09a7013a1aa824ea06f1f2facd09800e6cf3b4d4512dd850137da1",
+    "src/Player.cpp": "c3a9ddf4aeae14709322bdb26021e6d004cef54c7f529a5e68fff52d0ef91efa",
+    "src/Poker.cpp": "f80559d154cfc96f52904aa7e9e9f08f45f26e7b84f07b346871e2876d020944",
+    "src/Register.cpp": "7f833c8a9dee6c325428903be963b20d826cc57ead6aa8b0b6cbb0d4797695c2",
+    "src/Scheduler.cpp": "ccae56a440f0a1ef19c4878facb51dd98980a9f821da70410a4ca29a6df247e4",
+    "src/SystemCards.cpp": "529c3cb6c426593093dff97c0f05e947c68607776d94cc537270d411b14362bd",
+    "src/main.cpp": "b914743c625e0e44a2a62bc98d90fd5c9e7f1a737151934b4f52e304e07e021b",
+    "src/network/ListenEvent.cpp": "c193e88cf203ae5f0411e656f3589377cbbadb49616dc259c244f516310153a3",
+    "src/network/Protocol.cpp": "eb06f2c960e5d71702e896a0f8f7961d9ddba42670715b2e5b78ff3e366c71ee",
+    "src/network/Server.cpp": "5e367366b08004cb3dd7b8edba09064313c1bf1130d58a661328d3dad21c67d5",
+    "tools/import_function_card.py": "e44d06bd52391a42b71d6e9e04c08c195245e53a6be26ee38e713a3dc4ecabfa"
+  },
+  "cards": [
+    {
+      "name": "Demo function cards 1-10, including numeric enhancements",
+      "abilities": [
+        {
+          "event": "PlayCommitted",
+          "emits": [
+            "ScoreChanged",
+            "CoinsChanged"
+          ]
+        },
+        {
+          "event": "PassCommitted",
+          "emits": [
+            "ScoreChanged",
+            "CoinsChanged"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Consumable 1004: added pass skill",
+      "abilities": [
+        {
+          "event": "PassCommitted",
+          "emits": [
+            "CoinsChanged"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "System resource card 900001",
+      "abilities": [
+        {
+          "event": "AddScore",
+          "emits": [
+            "ScoreChanged"
+          ]
+        },
+        {
+          "event": "AddCoins",
+          "emits": [
+            "CoinsChanged"
+          ]
+        },
+        {
+          "event": "SpendCoins",
+          "emits": [
+            "CoinsChanged"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "System initial deal card 900002",
+      "abilities": [
+        {
+          "event": "InitialDealBefore",
+          "emits": [
+            "InitialDealAfter"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "System flow 900003: immediate effects; bounded disconnected-turn progression is a reviewed boundary",
+      "abilities": [
+        {
+          "event": "GameStart",
+          "emits": [
+            "ShopEnter"
+          ]
+        },
+        {
+          "event": "FinishShoppingRequest",
+          "emits": [
+            "ShopLeave"
+          ]
+        },
+        {
+          "event": "ShopLeave",
+          "emits": [
+            "AllShopsClosed"
+          ]
+        },
+        {
+          "event": "AllShopsClosed",
+          "emits": [
+            "RoundStart"
+          ]
+        },
+        {
+          "event": "RoundStart",
+          "emits": [
+            "InitialDealBefore"
+          ]
+        },
+        {
+          "event": "InitialDealAfter",
+          "emits": [
+            "TrickStart"
+          ]
+        },
+        {
+          "event": "TrickStart",
+          "emits": [
+            "TurnStart"
+          ]
+        },
+        {
+          "event": "TurnStart",
+          "emits": []
+        },
+        {
+          "event": "PlayCardsRequest",
+          "emits": [
+            "PlayValidate"
+          ]
+        },
+        {
+          "event": "PlayValidate",
+          "emits": [
+            "RoundWinnerLocked",
+            "PlayCommitted",
+            "ChoiceOpened"
+          ]
+        },
+        {
+          "event": "SubmitChoiceRequest",
+          "emits": [
+            "RoundWinnerLocked",
+            "PlayCommitted"
+          ]
+        },
+        {
+          "event": "PassRequest",
+          "emits": [
+            "PassCommitted"
+          ]
+        },
+        {
+          "event": "PlayCommitted",
+          "emits": [
+            "PlayRewardBefore"
+          ]
+        },
+        {
+          "event": "PlayRewardBefore",
+          "emits": [
+            "ScoreChanged",
+            "CoinsChanged",
+            "PlayRewardAfter"
+          ]
+        },
+        {
+          "event": "PlayRewardAfter",
+          "emits": [
+            "TurnEnd"
+          ]
+        },
+        {
+          "event": "PassCommitted",
+          "emits": [
+            "TurnEnd"
+          ]
+        },
+        {
+          "event": "TurnEnd",
+          "emits": [
+            "RoundEnd",
+            "TrickEnd",
+            "TurnStart"
+          ]
+        },
+        {
+          "event": "TrickEnd",
+          "emits": [
+            "DrawBefore"
+          ]
+        },
+        {
+          "event": "DrawBefore",
+          "emits": [
+            "DrawAfter",
+            "DrawPileExhausted",
+            "TrickDrawsAfter"
+          ]
+        },
+        {
+          "event": "TrickDrawsAfter",
+          "emits": [
+            "TrickStart"
+          ]
+        },
+        {
+          "event": "RoundEnd",
+          "emits": [
+            "RoundRewardBefore"
+          ]
+        },
+        {
+          "event": "RoundRewardBefore",
+          "emits": [
+            "ScoreChanged",
+            "CoinsChanged",
+            "RoundRewardAfter"
+          ]
+        },
+        {
+          "event": "RoundRewardAfter",
+          "emits": [
+            "GameEnd",
+            "ShopEnter"
+          ]
+        },
+        {
+          "event": "BuyShopItemRequest",
+          "emits": [
+            "ShopBuyQuote"
+          ]
+        },
+        {
+          "event": "ShopBuyQuote",
+          "emits": [
+            "FunctionCardEquipped",
+            "CoinsChanged",
+            "ShopBuyAfter",
+            "ConsumableUsed",
+            "ShopSlotsChanged",
+            "ShopLevelChanged",
+            "FunctionCardEnhanced"
+          ]
+        },
+        {
+          "event": "SellFunctionCardRequest",
+          "emits": [
+            "ShopSellQuote"
+          ]
+        },
+        {
+          "event": "ShopSellQuote",
+          "emits": [
+            "CoinsChanged",
+            "FunctionCardRemoved",
+            "ShopSellAfter"
+          ]
+        },
+        {
+          "event": "RefreshShopRequest",
+          "emits": [
+            "ShopRefreshQuote"
+          ]
+        },
+        {
+          "event": "ShopRefreshQuote",
+          "emits": [
+            "CoinsChanged",
+            "ShopRefreshAfter"
+          ]
+        },
+        {
+          "event": "LockShopSlotRequest",
+          "emits": [
+            "ShopSlotLocked"
+          ]
+        },
+        {
+          "event": "UnlockShopSlotRequest",
+          "emits": [
+            "ShopSlotUnlocked"
+          ]
+        },
+        {
+          "event": "UpgradeHandPatternRequest",
+          "emits": [
+            "CoinsChanged",
+            "HandPatternUpgraded"
+          ]
+        },
+        {
+          "event": "BuyFacilityRequest",
+          "emits": [
+            "CoinsChanged",
+            "FacilityPurchased"
+          ]
+        },
+        {
+          "event": "ActivateAbilityRequest",
+          "emits": [
+            "ShopActionWindow",
+            "PlayActionWindow"
+          ]
+        },
+        {
+          "event": "StateSyncRequest",
+          "emits": [
+            "StateSnapshotReadyControl"
+          ]
+        },
+        {
+          "event": "PreviewPlayRequest",
+          "emits": [
+            "PlayOptionsReadyControl"
+          ]
+        },
+        {
+          "event": "QuoteShopOperationRequest",
+          "emits": [
+            "ShopQuoteReadyControl"
+          ]
+        },
+        {
+          "event": "ShoppingDeadlineControl",
+          "emits": [
+            "ShopLeave"
+          ]
+        },
+        {
+          "event": "TurnDeadlineControl",
+          "emits": [
+            "ChoiceDeadlineControl",
+            "PassCommitted",
+            "RoundWinnerLocked",
+            "PlayCommitted"
+          ]
+        },
+        {
+          "event": "ChoiceDeadlineControl",
+          "emits": [
+            "RoundWinnerLocked",
+            "PlayCommitted"
+          ]
+        },
+        {
+          "event": "PlayerDisconnectedControl",
+          "emits": [
+            "TurnDeadlineControl"
+          ]
+        },
+        {
+          "event": "PlayerReconnectedControl",
+          "emits": []
+        },
+        {
+          "event": "ContinueGameRequest",
+          "emits": [
+            "ShopEnter"
+          ]
+        },
+        {
+          "event": "StartNewGameRequest",
+          "emits": [
+            "GameStart"
+          ]
+        }
+      ]
+    }
+  ]
+}
