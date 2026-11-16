@@ -1,0 +1,33 @@
+name: Effect design safety
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  effect_design:
+    name: Effect design safety
+    runs-on: ubuntu-22.04
+    timeout-minutes: 3
+
+    steps:
+      - name: 下载仓库代码
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      - name: 准备 Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0
+        with:
+          python-version: '3.12'
+
+      - name: 检查卡牌效果循环
+        run: python tools/check_effect_cycles.py
+
+      - name: 验证检查器本身
+        run: python tests/effect_cycles_test.py
