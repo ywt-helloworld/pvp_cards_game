@@ -37,7 +37,23 @@
 
 每个技能必须包含 `event`、`op`、正整数 `amount`。`scope` 可省略，默认为 `self`。数据要求 UTF-8，可带 BOM；文件最大 256 KiB。未知字段、重复 JSON 字段、布尔数值、负数、溢出和非法文件名都会报错。
 
-## 2. 事件与技能
+<a id="2-事件与技能"></a>
+
+## 2. JSON 可用事件与技能
+
+完整 C++ 接口包含 **136 种事件、62 个原子技能接口**；本页列出的是 JSON 生成器目前支持的 **16 种事件、5 个技能操作**。完整名称、作用、参数与 JSON 支持标记见[完整事件表](event-system.md#完整事件表)和[完整技能表](ability-system.md#完整技能表)。
+
+JSON 中 `event` 填触发事件名，`op` 填技能操作名。例如 `PlayCommitted` 是“成功出牌”，`add_score` 是“增加分数”；执行加分后可能产生的新事件叫 `ScoreChanged`。
+
+### 技能名称
+
+| 中文名称 | JSON `op` / C++ 函数名 | JSON 可用触发事件 |
+|---|---|---|
+| 增加分数 | `add_score` | 下表列出的成功通知 |
+| 获得金币 | `gain_coins` | 下表列出的成功通知 |
+| 增加待结算分数 | `add_pending_score` | `PlayRewardBefore`、`RoundRewardBefore` |
+| 增加待结算金币 | `add_pending_coins` | `PlayRewardBefore`、`RoundRewardBefore` |
+| 降低商店报价 | `reduce_shop_cost` | `ShopBuyQuote`、`ShopRefreshQuote` |
 
 ### 成功通知
 

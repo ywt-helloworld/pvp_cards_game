@@ -13,7 +13,7 @@ git switch -c cards/play-reward
 
 - `id`、`key` 必须唯一，`key` 与文件名一致。
 - 每项 `abilities` 只做一个原子操作，例如加分与加金币分开写。
-- 名称、说明应与实际效果和数值一致。字段、事件和技能见 [JSON 格式说明](docs/function-card-json.md)。
+- 名称、说明应与实际效果和数值一致。字段与可用范围见 [JSON 格式](docs/function-card-json.md)；完整名称见[事件表](docs/event-system.md#完整事件表)和[技能表](docs/ability-system.md#完整技能表)。
 
 ## 2. 生成代码
 

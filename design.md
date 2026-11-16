@@ -2109,3 +2109,9 @@ GitHub 工作流在 pull_request、main push 和 workflow_dispatch 时运行。�
 `tests/effect_cycles_test.py` 在隔离目录构造自循环、双牌及三牌组合、JSON/原生组合和系统资源中转等坏设计，验证检查失败且不修改定义；同时验证合法汇合、快照操作、源码覆盖变更、换行兼容和 CLI 失败退出码。当前保留为手动执行的独立测试，未注册到 CTest 或现有本地检查入口。
 
 按维护者要求，已撤下 `Effect design safety` 的自动执行与汇总依赖，保留检查脚本、测试及效果声明，等待维护者亲自发布工作流。现有 `PR checks` 仍只汇总原有平台矩阵。无需改动线上运行代码或部署服务器。逐步代码说明与维护方法见 [docs/effect-cycle-checks.md](docs/effect-cycle-checks.md)。
+
+## 17. 事件与原子技能接口索引
+
+当前源码定义 136 种 EventType 和 62 个 cardgame::abilities 公开接口。完整接口目录分别维护在 [事件索引](docs/event-system.md#完整事件表)和[技能索引](docs/ability-system.md#完整技能表)，列出事件编号、具体派生类、作用、技能函数名与参数顺序、返回通知，并标记 JSON 入口是否支持。源码与本文件的既有设计保持接口含义的依据。
+
+[JSON 功能牌说明](docs/function-card-json.md#2-json-可用事件与技能)仅列生成器开放的 16 种事件和 5 个技能操作；JSON op 名称与对应原子函数名一致。接口已经定义不表示当前服务器接通对应玩法；带 Operation 回调的接口还需要业务模块执行实际操作并填写结果。此次补充为接口文档，不扩展 JSON 白名单、技能实现或运行时事件行为。
