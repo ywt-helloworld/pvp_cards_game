@@ -1,8 +1,8 @@
-# PR 自动检查：从本地到 GitHub
+# PR 自动检查
 
 入口文件：[tools/check_pr.py](../tools/check_pr.py)。自动执行配置：[.github/workflows/pr-checks.yml](../.github/workflows/pr-checks.yml)。
 
-## 1. 先理解流程
+## 1. 流程
 
 ```mermaid
 flowchart LR
@@ -44,7 +44,7 @@ python tools/check_pr.py --generator "MinGW Makefiles" --npm-cli .tools/npm/pack
 
 原生构建位于 `build/pr-checks/`，不影响原来的 `build/`。切换不同编译器时可以用 `--build-dir build/another-check` 指定另一个目录。只跑网页时，可通过 `--engine` 指定已编译的服务器可执行文件。Windows 默认使用本机 Edge；可用 `BROWSER_PATH` 指向 Chrome。Linux runner 使用锁定版本的 Playwright Chromium；`--install-browser` 安装它及系统依赖，仅用于本机或 CI，不能在 2 GB 游戏服务器执行。
 
-## 3. GitHub 怎样自动调用
+## 3. GitHub 自动调用
 
 工作流放在仓库的 `.github/workflows/pr-checks.yml`。当前触发器为：
 
@@ -62,7 +62,7 @@ on:
 
 其中的 `run: python tools/check_pr.py --suite native` 就是在临时机器上执行同一个本地命令。PR 默认检查 GitHub 准备的合并结果；push 检查推送的提交。[GitHub 触发事件说明](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request)
 
-## 4. 本项目检查什么
+## 4. 本项目检查内容
 
 | 检查 | 作用 |
 |---|---|
@@ -77,7 +77,7 @@ Linux 跑原生和网页检查，Windows 跑原生检查；最后汇总为固定
 
 工作流仅申请 `contents: read`，不部署、不写入仓库、不使用项目密钥。Actions 固定到经过核对的提交 SHA。测试日志和截图作为 artifacts 保留 7 天。[GitHub Token 权限说明](https://docs.github.com/en/actions/tutorials/authenticate-with-github_token)
 
-## 5. 你平时怎么提交
+## 5. 提交方法
 
 在正常的 Git 克隆目录中执行以下流程。若工作目录没有 `.git`，先将仓库克隆到新的空目录，保留现有文件：
 
@@ -102,13 +102,13 @@ git push -u origin feature/my-change
 
 检查失败时，点进失败的步骤，先看第一处报错，再下载日志或截图。在同一分支修复、提交、push；原 PR 会自动重新检查，不用再开新 PR。
 
-## 6. 怎样做到“检查不过不能合并”
+## 6. 检查不过不能合并
 
 自动执行检查和禁止合并是两项独立配置。工作流先让结果出现在 PR 中；如果需要强制拦截，在仓库 Settings 的 Rulesets 或 Branches 中，为 main 设置“合并前必须通过状态检查”，选中 **PR checks**。需要该检查至少运行一次后才容易选到它。
 
 是否同时要求必须经过 PR、管理员能否绕过、是否要求人工审批，由分支规则单独决定，本工作流不会擅自改变这些仓库设置。[受保护分支说明](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
 
-## 7. 以后如何增加检查
+## 7. 增加检查
 
 - 新增 C++ 用例：在 `tests/` 加入测试，并在 `CMakeLists.txt` 注册；CTest 会自动带上它。
 - 新增网关场景：加入 `web/tests/gateway.test.mjs`，现有 `npm test` 会执行。
