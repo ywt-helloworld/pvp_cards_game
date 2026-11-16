@@ -16,8 +16,6 @@
 
 Fork 是 GitHub 上属于你的仓库副本，后续将分支推送到这里，再向原仓库提交 PR。[Fork 官方说明](https://docs.github.com/en/pull-requests/how-tos/work-with-forks/fork-a-repo)
 
-如果你是原仓库所有者，无需 Fork；下面克隆命令中的 `YOUR_GITHUB_NAME` 填 `ywt-helloworld`，并跳过添加 `upstream` 的步骤即可。
-
 #### 1.1.2 安装开发工具
 
 | 工具 | 版本与用途 | 安装入口 |
