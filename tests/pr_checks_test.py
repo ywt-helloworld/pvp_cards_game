@@ -17,7 +17,9 @@ class ChecksTest(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name).resolve()
         for name in ['tools/import_function_card.py','cards/function/steady_income.json',
-                     'include/cards/generated/steady_income.hpp','src/cards/generated/steady_income.cpp','src/CardCatalog.cpp']:
+                     'include/cards/generated/steady_income.hpp','src/cards/generated/steady_income.cpp',
+                     'cards/function/lightfooted.json','include/cards/generated/lightfooted.hpp',
+                     'src/cards/generated/lightfooted.cpp','src/CardCatalog.cpp']:
             dest=self.root/name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(ROOT/name,dest)
         (self.root/'docs').mkdir()
         (self.root/'README.md').write_text('[design](design.md)\n',encoding='utf-8')

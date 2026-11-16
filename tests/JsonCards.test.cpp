@@ -1,9 +1,42 @@
 #include "CardCatalog.hpp"
 #include "cards/generated/steady_income.hpp"
+#include "cards/generated/lightfooted.hpp"
 #include <cassert>
 #include <iostream>
 using namespace cardgame;
+void test_lightfooted() {
+    Player p(Players::P1,"owner");Register registry;Condition condition;HandleEvent handle(registry,condition);
+    registry.equip(p.id,0,generated::make_lightfooted(p,1));
+    auto play=[&](Players actor,ExecutionMode mode=ExecutionMode::Commit) {
+        auto event=std::make_unique<CardsPlayedEvent>();event->player=actor;event->actor=actor;
+        DispatchMeta meta;meta.mode=mode;assert(handle.handle_event(std::move(event),meta).failures.empty());
+    };
+    p.hand={1,2,3};play(p.id);assert(p.score==0);
+    p.hand={1,2};play(Players::P2);play(p.id,ExecutionMode::Preview);assert(p.score==0);
+    for(int n=0;n<5;++n)play(p.id);
+    assert(p.score==10); // More than three qualifying plays still receive the bonus.
+    p.hand={1};play(p.id);assert(p.score==12);
+    p.hand.clear();play(p.id);assert(p.score==14);
+    p.hand={1,2,3};play(p.id);assert(p.score==14);
+    FunctionCardEnhancement upgrade;upgrade.scoreDelta=1;registry.enhance(p.id,0,upgrade);
+    p.hand={1,2};play(p.id);assert(p.score==17);
+
+    std::array<Player,4> initial{Player(Players::P1,"one"),Player(Players::P2,"two"),Player(Players::P3,"three"),Player(Players::P4,"four")};
+    SchedulerConfig config;config.seed=1;config.rounds=1;
+    Scheduler game(std::move(initial),config);
+    for(auto actor:{Players::P1,Players::P2,Players::P3,Players::P4}) {
+        auto done=std::make_unique<FinishShoppingRequest>();done->actor=actor;done->shopId=game.shop(actor).id;
+        assert(game.submit(std::move(done)).failures.empty());
+    }
+    const auto actor=game.acting_player();auto& owner=game.player(actor);
+    const auto lastCard=*std::find_if(owner.hand.begin(),owner.hand.end(),[&](CardId id){return !game.poker(id).isJoker;});
+    owner.hand={lastCard};game.registry().equip(actor,0,generated::make_lightfooted(owner,game.next_card_sequence(actor)));
+    auto last=std::make_unique<PlayCardsRequest>();last->actor=actor;last->turnId=game.turn();last->cards={lastCard};
+    assert(game.submit(std::move(last)).failures.empty());
+    assert(game.phase()==GamePhase::Finished&&owner.score==19); // Single (1), bonus (2), round reward (16).
+}
 int main() {
+    test_lightfooted();
     Player p(Players::P1,"owner");Register registry;Condition condition;HandleEvent handle(registry,condition);
     const auto catalog=generated_function_cards();
     const auto definition=std::find_if(catalog.begin(),catalog.end(),[](const auto& c){return c.id==2001;});

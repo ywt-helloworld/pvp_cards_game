@@ -86,6 +86,16 @@ class ImporterTest(unittest.TestCase):
         with self.assertRaises(importer.CardError):importer.import_card(self.write(),self.root,force=True)
         self.assertEqual(before,self.files())
 
+    def test_hand_size_condition_validation(self):
+        self.card['abilities'] = [{'event':'PlayCommitted','op':'add_score','amount':2,'max_hand_size':2}]
+        self.assertEqual(importer.validate(self.card)['abilities'][0]['max_hand_size'],2)
+        for change in [{'max_hand_size':True},{'max_hand_size':-1},{'max_hand_size':55},
+                       {'max_hand_size':1.5},{'event':'PassCommitted'},{'scope':'any_player'}]:
+            card=copy.deepcopy(self.card);card['abilities'][0].update(change)
+            with self.subTest(change=change):
+                with self.assertRaises(importer.CardError):importer.import_card(self.write(card),self.root)
+                self.assertEqual(self.files(),{})
+
     def test_partial_write_failure_rolls_back_existing_files(self):
         importer.import_card(self.write(),self.root);before=self.files()
         self.card['abilities'][0]['amount']=9;self.write()

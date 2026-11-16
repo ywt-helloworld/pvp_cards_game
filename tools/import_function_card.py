@@ -107,7 +107,7 @@ def validate(card):
     require(type(card['abilities']) is list and 1 <= len(card['abilities']) <= 64, 'abilities: expected 1..64 atomic abilities')
     for i, skill in enumerate(card['abilities']):
         at = f'abilities[{i}]'
-        object_keys(skill, {'event','op','amount'}, {'scope','minimum'}, at)
+        object_keys(skill, {'event','op','amount'}, {'scope','minimum','max_hand_size'}, at)
         require(type(skill['event']) is str and skill['event'] in EVENTS, f'{at}.event: unsupported event')
         scope = skill.get('scope', 'self')
         require(scope in ('self','any_player'), f'{at}.scope: use self or any_player')
@@ -117,6 +117,10 @@ def validate(card):
         require(type(op) is str and op in ACTIONS, f'{at}.op: unsupported atomic action')
         require(ACTIONS[op] == kind, f'{at}: action {op} cannot run at event {skill["event"]}')
         integer(skill['amount'], 1, MAX_AMOUNT, at+'.amount')
+        if 'max_hand_size' in skill:
+            require(skill['event'] == 'PlayCommitted' and scope == 'self',
+                    f'{at}: max_hand_size requires PlayCommitted with scope self')
+            integer(skill['max_hand_size'], 0, 54, at+'.max_hand_size')
         if 'minimum' in skill:
             require(op == 'reduce_shop_cost', f'{at}: minimum is only valid for reduce_shop_cost')
             integer(skill['minimum'], 0, MAX_AMOUNT, at+'.minimum')
@@ -173,8 +177,10 @@ void {cls}::resolve(const Context& c, CardEffects& out) {{
         event_class, subject, kind = EVENTS[skill['event']]
         parts.append(f'    if (c.type()==EventType::{skill["event"]}) {{\n')
         if subject and skill['scope'] == 'self':
+            hand_condition = (f' && owner_.hand.size()<={skill["max_hand_size"]}ULL'
+                              if 'max_hand_size' in skill else '')
             parts.append(f'        const auto* event=c.event_as<{event_class}>();\n'
-                         f'        if (event && event->{subject}==owner_.id) {{\n')
+                         f'        if (event && event->{subject}==owner_.id{hand_condition}) {{\n')
         else:
             parts.append('        {\n')
         if kind == 'fact':

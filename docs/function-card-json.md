@@ -74,6 +74,8 @@ JSON 中 `event` 填触发事件名，`op` 填技能操作名。例如 `PlayComm
 
 局、巡、整场事件是全局通知，使用 `self`，表示持有者在每次全局通知获得一次效果；不按事件的 actor 推断赢家或先手。
 
+`PlayCommitted` 且 `scope: "self"` 的技能可选填 `max_hand_size`（整数 `0～54`），仅在自己成功出牌后的剩余手牌数不超过该值时触发，包括出完手牌时的 `0` 张。该条件不限制触发次数，示例见[轻装上阵](../cards/function/lightfooted.json)。
+
 ### 待结算奖励
 
 `PlayRewardBefore`、`RoundRewardBefore` 支持 `add_pending_score`、`add_pending_coins`，修改当前出牌或局末奖励；不会当场给玩家增加资源。
