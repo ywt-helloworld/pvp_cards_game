@@ -48,6 +48,8 @@ python tools/check_pr.py
 确认正确后在项目根目录下执行：
 
 ```text
+
+## 2
 git add cards/function/play_reward.json include/cards/generated/play_reward.hpp src/cards/generated/play_reward.cpp src/CardCatalog.cpp
 git commit -m "feat: add play reward card"
 git push -u origin cards/play-reward
