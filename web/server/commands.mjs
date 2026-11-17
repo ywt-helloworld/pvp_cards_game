@@ -9,7 +9,7 @@ export function command(a) {
   const shop = () => integer(a.shop);
   const cards = () => {
     if (!Array.isArray(a.cards) || !a.cards.length || a.cards.length > 54) throw Error('请选择手牌');
-    const ids = a.cards.map(v => integer(v, 54));
+    const ids = a.cards.map(v => integer(v, 62));
     if (ids.includes(0) || new Set(ids).size !== ids.length) throw Error('手牌编号无效');
     return ids.join(' ');
   };
@@ -25,6 +25,7 @@ export function command(a) {
     case 'play': return `PLAY ${integer(a.turn)} ${cards()}`;
     case 'options': return `OPTIONS ${cards()}`;
     case 'choose': return `CHOOSE ${integer(a.choice)} ${integer(a.option, 100000)}`;
+    case 'mold': return `ABILITY ${integer(a.seq)} 1`;
     case 'pass': return `PASS ${integer(a.turn)}`;
     case 'continue':
       if (!['EXTRA3', 'ENDLESS'].includes(a.mode)) throw Error('无效的续局模式');

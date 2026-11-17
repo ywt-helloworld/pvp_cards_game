@@ -67,7 +67,17 @@ void FunctionCards::enhance(const FunctionCardEnhancement& e) {
     auto mask=subscriptions_;
     for(const auto& skill:e.skills)mask|=skill.subscriptions;
     apply_bonus_upgrade(e.scoreDelta,e.coinsDelta);
+    addedScore_+=e.scoreDelta; addedCoins_+=e.coinsDelta;
     addedSkills_.swap(skills);subscriptions_=mask;++enhancementLevel_;
+}
+void FunctionCards::inherit_enhancements(const FunctionCards& previous) {
+    if (!previous.enhancementLevel_) return;
+    FunctionCardEnhancement upgrade;
+    upgrade.scoreDelta = previous.addedScore_;
+    upgrade.coinsDelta = previous.addedCoins_;
+    for (const auto& skill : previous.addedSkills_) upgrade.skills.push_back(*skill);
+    enhance(upgrade);
+    enhancementLevel_ = previous.enhancementLevel_;
 }
 CallbackFunctionCard::CallbackFunctionCard(CardRef reference, DefinitionId definition,
     std::string name, EventMask mask, CardHandler handler, bool previewSafe)

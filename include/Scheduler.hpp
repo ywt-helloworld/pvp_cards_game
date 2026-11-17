@@ -14,6 +14,7 @@ struct ShopOffer {
     ShopProductKind kind = ShopProductKind::FunctionCard;
     std::string description;
     bool needsTarget = false;
+    bool upgrade = false;
 };
 struct ShopState {
     ShopId id = 0;
@@ -30,6 +31,14 @@ struct PendingPlayChoice {
     TurnId turn = 0;
     std::vector<CardId> cards;
     std::vector<MoveOption> options;
+};
+struct CandyChoice {
+    enum class Kind { Steal, Hammer, Sacrifice };
+    ChoiceId id;
+    Kind kind;
+    Players attacker, defender;
+    std::vector<std::size_t> slots;
+    Players responder() const {return kind==Kind::Sacrifice ? defender : attacker;}
 };
 struct SchedulerConfig {
     struct CardDefinition {
@@ -58,6 +67,8 @@ public:
     void disconnected(Players player);
     void reconnected(Players player);
     GamePhase phase() const noexcept { return phase_; }
+    const std::optional<CandyChoice>& candy_choice() const {return candyChoice_;}
+    bool mold_used(Players p) const {return usedSpecial_[index(p)].count(3019)!=0;}
     RoundId round() const noexcept { return round_; }
     TurnId turn() const noexcept { return turn_; }
     Players acting_player() const noexcept { return acting_; }
@@ -89,6 +100,7 @@ private:
     DispatchReport dispatch(EventPtr event, DispatchMeta meta = {});
     void process(const Context& context, CardEffects& effects);
     void open_shops(CardEffects& effects);
+    void price_family_offers(Players player, ShopState& shop) const;
     void fill_shop(Players player, bool refreshing, std::size_t firstSlot = 0);
     void fill_offers(Players player, ShopState& shop, bool refreshing, std::size_t firstSlot,
                      std::mt19937& random, std::uint64_t& sequence);
@@ -132,6 +144,11 @@ private:
     std::array<std::size_t, 4> lockedHands_{};
     std::array<bool, 4> roundPaid_{};
     std::vector<Players> winners_;
+    std::array<std::set<DefinitionId>,4> usedSpecial_{};
+    std::array<std::set<HandPattern>,4> playedPatterns_{};
+    std::optional<CandyChoice> candyChoice_;
+    std::array<bool,4> hammerUsed_{}, hammerHit_{};
+    std::array<bool,4> savingsReady_{};
     RoundId round_ = 1;
     TurnId turn_ = 0;
     TrickId trick_ = 0;

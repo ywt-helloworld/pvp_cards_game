@@ -107,4 +107,33 @@ void facilities_compose_with_consumables() {
     assert(checked);
 }
 }
-int main(){shop_capacity_and_failure();shop_level_and_caps();numeric_target_checks();added_skill_and_atomic_validation();facilities_compose_with_consumables();std::cout<<"Consumables: immediate use, persistence, caps, targets, numeric/skill enhancements and registration passed.\n";}
+void shaping_cards_exchange_real_cards() {
+    for (DefinitionId id : {3001, 3002}) {
+        bool changed = false;
+        for (unsigned seed = 1; seed <= 60 && !changed; ++seed) {
+            SchedulerConfig cfg; cfg.seed = seed;
+            Scheduler baseline(players(),cfg), shaped(players(),cfg);
+            const auto owner = Players::P1;
+            shaped.registry().equip(owner,0,std::make_shared<ResourceBonusCard>(
+                shaped.player(owner),1,id,"shape",EventType::PlayCommitted,0,0));
+            baseline.timeout(); shaped.timeout();
+            const auto& before = baseline.player(owner).hand;
+            const auto& after = shaped.player(owner).hand;
+            assert(before.size()==7 && after.size()==7);
+            assert(baseline.deck_remaining()==shaped.deck_remaining());
+            if (before==after) continue;
+            const auto first = std::find_if(before.begin(),before.end(),
+                [&](CardId c){return !baseline.poker(c).isJoker;});
+            const int wanted = *baseline.poker(*first).rank + (id==3002 ? 1 : 0);
+            std::size_t swaps=0;
+            for (std::size_t i=0;i<before.size();++i) if (before[i]!=after[i]) {
+                ++swaps;
+                assert(shaped.poker(after[i]).rank==wanted);
+                assert(!baseline.poker(before[i]).isJoker);
+            }
+            assert(swaps==1); changed=true;
+        }
+        assert(changed);
+    }
+}
+int main(){shaping_cards_exchange_real_cards();shop_capacity_and_failure();shop_level_and_caps();numeric_target_checks();added_skill_and_atomic_validation();facilities_compose_with_consumables();std::cout<<"Consumables: immediate use, persistence, caps, targets, numeric/skill enhancements and registration passed.\n";}

@@ -69,7 +69,7 @@ std::string state_message(const Scheduler& g,Players viewer) {
         }out<<"]}";
     }
     const auto& self=g.player(viewer);
-    out<<"],\"self\":{\"functionSlots\":"<<self.functionSlots<<",\"shopLevel\":"<<self.shopLevel
+    out<<"],\"self\":{\"functionSlots\":"<<self.functionSlots<<",\"moldUsed\":"<<(g.mold_used(viewer)?"true":"false")<<",\"shopLevel\":"<<self.shopLevel
        <<",\"shopSlots\":"<<g.shop(viewer).offers.size()<<",\"upgrades\":[";
     for(std::size_t i=0;i<self.upgrades.size();++i){if(i)out<<',';out<<self.upgrades[i];}
     out<<"],\"facilities\":[";
@@ -85,8 +85,27 @@ std::string state_message(const Scheduler& g,Players viewer) {
     }
     out<<"],\"table\":[";
     for(std::size_t i=0;i<g.table_cards().size();++i){if(i)out<<',';out<<g.table_cards()[i];}
+    out<<"],\"tableFaces\":[";
+    for (std::size_t i=0;i<g.table_cards().size();++i) {
+        const auto& c=g.poker(g.table_cards()[i]);
+        if (i) out<<',';
+        out<<"{\"id\":"<<c.id<<",\"rank\":"<<c.rank.value_or(0)<<",\"suit\":"
+           <<(c.suit?static_cast<int>(*c.suit):-1)<<",\"joker\":"<<(c.isJoker?"true":"false")<<"}";
+    }
     out<<"],\"lastPlay\":";
     moves(out,g.table_move()?std::vector<MoveOption>{*g.table_move()}:std::vector<MoveOption>{});
+    out<<",\"candyPending\":"<<(g.candy_choice()?"true":"false");
+    if (const auto& pending=g.candy_choice(); pending && pending->responder()==viewer) {
+        out<<",\"candyChoice\":{\"id\":"<<pending->id<<",\"kind\":"
+           <<static_cast<int>(pending->kind)<<",\"options\":[";
+        if (pending->kind==CandyChoice::Kind::Sacrifice) {
+            for (std::size_t i=0;i<pending->slots.size();++i) {
+                if (i) out<<',';
+                out<<json_string(g.registry().at(viewer,pending->slots[i])->name());
+            }
+        } else out<<"\"放弃\",\"发动\"";
+        out<<"]}";
+    }
     out<<",\"shop\":";
     if(g.phase()==GamePhase::Shopping) {
         const auto& s=g.shop(viewer);
@@ -106,7 +125,7 @@ std::string state_message(const Scheduler& g,Players viewer) {
                 const auto targets=g.consumable_targets(viewer,o.definition);
                 for(std::size_t j=0;j<targets.size();++j){if(j)out<<',';out<<targets[j].seq;}
             }
-            out<<"],\"needsTarget\":"<<(o.needsTarget?"true":"false")
+            out<<"],\"upgrade\":"<<(o.upgrade?"true":"false")<<",\"needsTarget\":"<<(o.needsTarget?"true":"false")
                <<",\"locked\":"<<((s.locked&&*s.locked==i)?"true":"false")<<"}";
         }out<<"]}";
     }else out<<"null";

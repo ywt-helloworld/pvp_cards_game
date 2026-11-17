@@ -130,7 +130,7 @@ void snapshots_active_and_shop_services(){
  auto buy=std::make_unique<BuyShopItemRequest>();buy->actor=p;buy->shopId=shopId;buy->slotId=0;buy->productId=offers[0].id;
  report=game.submit(std::move(buy));assert(report.failures.empty());
  assert(!game.shop(p).offers[0].id&&game.player(p).coins==before-offers[0].price);
- const auto owned=game.registry().at(p,0);assert(owned&&game.registry().matrix()[0].any());
+ const auto owned=game.registry().at(p,0);assert(owned&&owned->definition()==offers[0].definition&&game.registry().matrix()[0]==owned->subscriptions());
  auto sell=std::make_unique<SellFunctionCardRequest>();sell->actor=p;sell->shopId=shopId;sell->card=*owned->reference();
  report=game.submit(std::move(sell));assert(report.failures.empty());
  assert(!game.registry().at(p,0)&&game.registry().matrix()[0].none());

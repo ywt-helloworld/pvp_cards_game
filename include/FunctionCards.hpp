@@ -28,6 +28,7 @@ public:
     virtual ~FunctionCards() = default;
     virtual void resolve(const Context& context, CardEffects& effects) = 0;
     void resolve_all(const Context& context, CardEffects& effects);
+    void inherit_enhancements(const FunctionCards& previous);
     virtual std::string description() const { return {}; }
     std::string full_description() const;
     unsigned enhancement_level() const noexcept { return enhancementLevel_; }
@@ -61,6 +62,8 @@ private:
     const EventMask baseSubscriptions_;
     EventMask subscriptions_; // 强化附加技能后由 Register 同步到订阅矩阵。
     std::vector<std::shared_ptr<AddedCardSkill>> addedSkills_;
+    ScoreValue addedScore_ = 0;
+    CoinValue addedCoins_ = 0;
     unsigned enhancementLevel_ = 0;
     SystemOrder order_ = SystemOrder::AfterPlayers;
     bool previewSafe_ = false;

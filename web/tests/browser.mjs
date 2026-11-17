@@ -31,8 +31,10 @@ try {
   await p.screenshot({path:'../test-results/desktop-shop.png',fullPage:true});
   await p.setViewportSize({width:844,height:390});
   await p.screenshot({path:'../test-results/mobile-shop.png',fullPage:true});
+  const offerText = await p.locator('.function-card:has(.buy:enabled) .effect').first().textContent();
+  assert.ok(offerText.trim());
   await p.locator('.buy:enabled').first().click();await p.locator('.owned-card').waitFor();
-  assert.match(await p.locator('.owned-card').textContent(),/自己.*后/);
+  assert.equal(await p.locator('.owned-card small').first().textContent(),offerText);
   const purchasedEffect=await p.locator('.owned-card small').first().textContent();
   await p.locator('.owned-face').first().click();
   assert.equal(await p.locator('#functionDescription').textContent(),purchasedEffect);
