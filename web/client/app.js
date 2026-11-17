@@ -111,6 +111,9 @@ const levelBadge = c => c.enhancementLevel ? `<span class="level-badge">强化 +
 function functionDock(g, me) {
   return `<aside class="function-dock" aria-labelledby="functionHeading"><div class="dock-heading"><div><p class="eyebrow">YOUR BUILD</p><h3 id="functionHeading">我的功能牌</h3></div><span class="slot-count">${me.cards.length}/${g.self.functionSlots}</span></div><p class="dock-hint">自动生效 · 点击查看详情</p><div class="equipped-cards">${me.cards.length ? me.cards.map(c => `<button class="equipped-card" data-inspect="${c.seq}" aria-haspopup="dialog"><span class="equipped-top"><span class="card-symbol" aria-hidden="true">${suits[c.definition%4]}</span><span class="slot-number">槽位 ${c.slot+1}</span>${levelBadge(c)}</span><strong>${cardLabel(c)}</strong><span class="equipped-effect">${esc(effectText(c))}</span></button>`).join('') : '<div class="empty-build"><span aria-hidden="true">♧</span><p>还没有功能牌</p><small>下次商店购买后，效果会显示在这里。</small></div>'}</div></aside>`;
 }
+function canActThisTurn(g) {
+  return g.phase === 'playing' && g.acting === g.seat && !g.choice && !g.candyPending;
+}
 function handView(g, myTurn, blocked) {
   return `<section class="hand-section"><div class="hand-heading"><span>你的手牌 <b>${g.hand.length}</b> 张 <span id="selectionCount" class="selection-count">已选 ${selected.size} 张</span></span><button class="quiet" data-do="clear">清空选择</button></div><div class="hand">${[...g.hand].sort((a,b)=>(a.joker?100:a.rank===2?15:a.rank)-(b.joker?100:b.rank===2?15:b.rank)||a.suit-b.suit).map(c=>poker(c,true)).join('')}</div><div class="actionbar">${g.players[g.seat].cards.filter(c=>c.definition===3019).map(c=>`<button data-do="mold" data-seq="${c.seq}" ${disabled(blocked||!myTurn||g.choice||g.self.moldUsed||g.players[g.seat].coins<2||g.hand.filter(h=>h.id<=54&&!h.joker).length<2)}>复制两张 · 2 糖果</button>`).join('')}<button class="primary" data-do="play" ${disabled(blocked||!myTurn||!selected.size)}>出牌</button><button data-do="pass" ${disabled(blocked||!myTurn||!g.table.length)}>不出</button><button data-do="options" ${disabled(blocked||!selected.size||!!g.choice)}>查看方案</button><span class="action-hint">${g.choice?'请在弹窗确认出牌方案':myTurn?(g.table.length?'同型同张数，点数接大一档；2 / 炸弹按特殊规则。':'你领出，请选择手牌。'):'点击手牌预选，轮到你后出牌。'}</span></div>${g.preview.length?`<p class="preview muted">选牌方案：${g.preview.slice(0,8).map(m=>`${patterns[m.pattern]} ${rank(m.rank)}`).join(' / ')}${g.preview.length>8?` … 共 ${g.preview.length} 种`:''}</p>`:''}</section>`;
 }
@@ -118,7 +121,7 @@ function renderGame() {
   const g=state, me=g.players[g.seat], blocked=busy||!socket.connected;
   const handScroll=document.querySelector('.hand')?.scrollLeft||0;
   const dockScroll=document.querySelector('.equipped-cards')?.scrollTop||0;
-  const myTurn=g.phase==='playing'&&g.acting===g.seat&&!g.choice&&!g.candyPending;
+  const myTurn=canActThisTurn(g);
   const heading=g.phase==='shopping'?'局前商店':g.phase==='finished'?'本场结束':g.acting===g.seat?'轮到你出牌':`等待 ${g.players[g.acting].name} 出牌`;
   $('app').innerHTML=`<section class="game"><div class="roomline"><span>房间 <b>${esc(g.room||joined?.room)}</b> <button class="quiet" data-do="copy">邀请</button></span><span>第 ${g.round} 局 · ${g.phase==='shopping'?'并行购物':'逆时针出牌'} · 牌堆 ${g.deck} 张</span><span>糖果卡池</span></div><div class="players">${g.players.map(p=>`<div class="player ${p.seat===g.seat?'mine':''} ${g.phase==='playing'&&p.seat===g.acting?'acting':''}"><div class="player-name"><span>P${p.seat+1} ${esc(p.name)} ${p.seat===g.seat?'· 你':''}</span><small>${p.connected?'在线':'离线'}</small></div><div class="player-stats"><span>糖度 ${p.score??'—'}</span><span>糖果 ${p.coins??'—'}</span><span>手牌 ${p.handCount}</span></div><div class="player-cards">${p.cards.length?p.cards.map(c=>cardLabel(c)).join(' · '):g.phase==='shopping'&&p.seat!==g.seat?'购物信息私密':'暂无功能牌'}</div></div>`).join('')}</div>
     <div class="${g.phase==='playing'?'play-layout':'phase-layout'}"><div class="play-main"><section class="stage ${g.phase==='shopping'?'shop-stage':''}"><div class="stage-heading"><div>${g.phase==='shopping'?'<p class="eyebrow">THE CARD SHOP</p>':''}<h2>${esc(heading)}</h2></div>${g.phase!=='finished'?'<span class="timer" id="timer"></span>':''}</div>
@@ -169,7 +172,7 @@ function updateSelection() {
   if(!$('selectionCount')||!state) return;
   $('selectionCount').textContent=`已选 ${selected.size} 张`;
   const blocked=busy||!socket.connected;
-  document.querySelector('[data-do="play"]').disabled=blocked||state.acting!==state.seat||!!state.choice||!selected.size;
+  document.querySelector('[data-do="play"]').disabled=blocked||!canActThisTurn(state)||!selected.size;
   document.querySelector('[data-do="options"]').disabled=blocked||!selected.size||!!state.choice;
 }
 function showCardDetails(c, isOffer=false) {
