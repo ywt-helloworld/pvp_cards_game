@@ -18,6 +18,14 @@ template<class E, class Fill> void emit(CardEffects& out, Fill fill) {
         std::is_same_v<E, GameEndedEvent> || std::is_same_v<E, DrawPileExhaustedEvent>;
     out.emit(std::move(event), 0, !global);
 }
+DefinitionId candy_family(DefinitionId id) {
+    switch (id) {
+    case 1: case 7: case 10: return 1;
+    case 2: case 8: return 2;
+    case 3: case 9: return 3;
+    default: return 0;
+    }
+}
 const CoinValue facilityPrices[] = {0,18,30,20,35,14,14,12,12};
 const CoinValue upgradePrices[] = {4,6,8,10,10};
 std::size_t pattern_index(HandPattern pattern) {
@@ -39,31 +47,72 @@ Scheduler::Scheduler(std::array<Player, 4> players, SchedulerConfig config)
         config_.turnTime.count() <= 0 || config_.choiceTime.count() <= 0)
         throw std::invalid_argument("Invalid scheduler configuration");
     if (config_.catalog.empty()) {
-        for (DefinitionId d=1; d<=10; ++d) {
-            const std::string name="Demo card "+std::to_string(d);
-            config_.catalog.push_back({d,name,3+static_cast<CoinValue>(d%4),
-                [d,name](Player& p,std::size_t sequence) {
-                    const bool pass=d==4||d==5;
-                    const ScoreValue score=d%3==1?1+static_cast<ScoreValue>(d/4):d%3==0?1:0;
-                    const CoinValue coins=d%3==2?1:d%3==0?1:0;
-                    return std::make_shared<ResourceBonusCard>(p,sequence,d,name,
-                        pass?EventType::PassCommitted:EventType::PlayCommitted,score,coins);
-                }, d<=6?1u:d<=8?2u:3u});
+        using Pattern = HandPattern;
+        struct Reward {
+            DefinitionId id; const char* name; CoinValue price; unsigned level;
+            ScoreValue score; CoinValue coins; unsigned limit;
+            std::optional<Pattern> pattern; bool pass; bool anyPlayer;
+        };
+        const Reward rewards[] = {
+            {1,"大白兔奶糖",4,1,1,0,0,{},false,false},
+            {2,"QQ糖",4,1,0,1,0,{},false,false},
+            {3,"健达巧克力",6,1,1,1,0,{},false,false},
+            {4,"旺仔奶糖",3,1,2,0,2,{},true,false},
+            {5,"悠哈悠哈",3,1,0,1,2,{},true,false},
+            {6,"健达奇趣蛋",6,2,2,2,1,{},false,false},
+            {7,"大白兔奶糖+",7,2,2,0,0,{},false,false},
+            {8,"QQ糖+",8,2,0,2,0,{},false,false},
+            {9,"健达巧克力+",12,3,2,2,0,{},false,false},
+            {10,"大白兔奶糖++",11,3,3,0,0,{},false,false},
+            {3010,"双子软糖",4,1,0,2,2,Pattern::Pair,false,false},
+            {3011,"彩虹糖带",5,1,3,0,2,Pattern::Straight,false,false},
+            {3012,"烟花跳跳糖",6,2,0,2,1,Pattern::Bomb,false,true},
+            {3013,"爆心硬糖",7,2,3,0,1,Pattern::Bomb,false,false}
+        };
+        for (const auto& reward : rewards) {
+            auto make = [reward](Player& owner,std::size_t seq) {
+                return std::make_shared<ResourceBonusCard>(owner,seq,reward.id,reward.name,
+                    reward.pass ? EventType::PassCommitted : EventType::PlayCommitted,
+                    reward.score,reward.coins,reward.limit,reward.pattern,reward.anyPlayer);
+            };
+            config_.catalog.push_back({reward.id,reward.name,reward.price,make,reward.level,
+                make(players_[0],1)->description()});
         }
-        for(auto& card:generated_function_cards())config_.catalog.push_back(std::move(card));
+        struct Specialty { DefinitionId id; const char* name; CoinValue price; unsigned level; const char* text; };
+        const Specialty special[] = {
+            {2001,"储钱罐",7,2,"局初持有至少 10 颗糖果时，首次成功出牌额外获得 3 糖度。"},
+            {3001,"对对夹心",6,1,"起手补齐首张普通牌的对子，以最后一张其他普通牌交换。"},
+            {3002,"彩条软尺",8,2,"起手补齐首张普通牌的下一点数，以最后一张其他普通牌交换。"},
+            {3014,"酸糖扒手",5,1,"每局首次成功压过对手，拿走其至多 2 颗糖果。"},
+            {3015,"柠檬吸管",6,2,"每局首次用普通顺子压牌，吸取被压者至多 2 糖度。"},
+            {3016,"薄荷冲刺鞋",5,1,"率先清手且其他人各剩至少两张牌时，额外获得 4 糖度。"},
+            {3017,"什锦糖串",6,2,"每局首次集齐三种已打出的牌型，获得 5 糖度。"},
+            {3018,"酸梅夹心",5,2,"每局首次压过出手前糖度高于自己的玩家，获得 3 糖度。"},
+            {3020,"夹心妙手",7,2,"每局首次用对子压牌，可随机拿走对手一张普通原牌。对手需至少剩两张。"},
+            {3021,"焦糖碎锤",10,3,"用同花顺压牌可摧毁对方一张基础功能牌，对方选择并取回半价糖果。每场限一次。"},
+            {3019,"双格糖模",8,2,"每局一次，出牌前支付 2 颗糖果，复制最大的两张普通原牌。"}
+        };
+        for (auto spec : special) {
+            config_.catalog.push_back({spec.id,spec.name,spec.price,
+                [spec](Player& owner,std::size_t seq) {
+                    return std::make_shared<SpecialtyCard>(CardRef{owner.id,seq},spec.id,spec.name,spec.text);
+                },spec.level,spec.text});
+        }
+        for (auto& card : generated_function_cards())
+            if (card.id != 2001) config_.catalog.push_back(std::move(card));
     }
     if(config_.consumables.empty()) {
         config_.consumables.push_back({1001,"货架扩容",4,"立即增加 1 个普通货位，本场保留",ExpandShopSlots{1}});
         config_.consumables.push_back({1002,"商店升级",4,"商店等级 +1，后续出货解锁更高等级功能牌",UpgradeShop{1}});
         FunctionCardEnhancement score;score.scoreDelta=1;
-        config_.consumables.push_back({1003,"数值强化",3,"指定功能牌的原有触发效果增加 1 分",EnhanceFunctionCard{score}});
+        config_.consumables.push_back({1003,"数值强化",3,"指定功能牌的原有触发效果增加 1 糖度",EnhanceFunctionCard{score}});
         FunctionCardEnhancement skill;
         skill.skills.push_back({FunctionCards::listens_to({EventType::PassCommitted}),
             [this](const Context& c,CardEffects& out) {
                 const auto* e=c.event_as<PlayerPassedEvent>();
                 if(e&&c.owner()&&e->player==*c.owner())out.emit(abilities::gain_coins(player(e->player),1,"added skill"));
-            },"新增技能：自己不出后 +1 金币"});
-        config_.consumables.push_back({1004,"技能强化",4,"指定功能牌新增「自己不出后 +1 金币」",EnhanceFunctionCard{skill}});
+            },"新增技能：自己不出后 +1 糖果"});
+        config_.consumables.push_back({1004,"技能强化",4,"指定功能牌新增「自己不出后 +1 糖果」",EnhanceFunctionCard{skill}});
     }
     std::set<DefinitionId> definitions;
     for (const auto& definition:config_.catalog)
@@ -280,10 +329,36 @@ void Scheduler::use_consumable(Players p,const ConsumableCard& card,std::optiona
         } else out.emit(abilities::enhance_function_card(registry_,p,card_slot(*target),effect.enhancement));
     },card.effect);
 }
+void Scheduler::price_family_offers(Players seat, ShopState& shop) const {
+    for (auto& offer : shop.offers) {
+        const auto family = candy_family(offer.definition);
+        if (!offer.id || !family) continue;
+        const auto price = [&](DefinitionId id) {
+            return std::find_if(config_.catalog.begin(), config_.catalog.end(),
+                [&](const auto& card){return card.id == id;})->price;
+        };
+        offer.price = price(offer.definition);
+        offer.upgrade = false;
+        for (const auto& owned : registry_.player_cards(seat)) {
+            if (candy_family(owned->definition()) != family) continue;
+            if (owned->definition() >= offer.definition) offer = {};
+            else {
+                offer.price -= price(owned->definition());
+                offer.upgrade = true;
+            }
+            break;
+        }
+    }
+}
 void Scheduler::fill_offers(Players p,ShopState& s,bool refreshing,std::size_t firstSlot,
                             std::mt19937& random,std::uint64_t& sequence) {
     std::set<DefinitionId> used;
-    for (const auto& card : registry_.player_cards(p)) used.insert(card->definition());
+    for (const auto& card : registry_.player_cards(p)) {
+        used.insert(card->definition());
+        const auto family = candy_family(card->definition());
+        if (family) for (const auto& def : config_.catalog)
+            if (candy_family(def.id)==family && def.id<=card->definition()) used.insert(def.id);
+    }
     for (std::size_t i = 0; i < s.offers.size(); ++i)
         if (i < firstSlot || (s.locked && *s.locked == i) || (refreshing && !firstSlot && !s.offers[i].id))
             if (s.offers[i].id) used.insert(s.offers[i].definition);
@@ -318,6 +393,7 @@ void Scheduler::fill_offers(Players p,ShopState& s,bool refreshing,std::size_t f
             [&](const auto& item){return item.id==d;});
         s.offers[i] = {++sequence, d, definition->price, definition->name,ShopProductKind::FunctionCard,definition->description};
     }
+    price_family_offers(p,s);
 }
 void Scheduler::open_shops(CardEffects& out) {
     phase_ = GamePhase::Shopping; awaiting_ = false; choice_.reset();
@@ -346,6 +422,8 @@ void Scheduler::open_shops(CardEffects& out) {
 }
 void Scheduler::start_round(CardEffects& out) {
     phase_ = GamePhase::RoundStarting; roundLocked_ = false; choice_.reset();
+    usedSpecial_ = {}; playedPatterns_ = {};
+    for (const auto& p : players_) savingsReady_[index(p.id)] = p.coins >= 10;
     cards_ = standard_deck(); drawPile_.clear(); discarded_.clear(); tableCards_.clear(); table_.reset();
     for (const auto& card : cards_) drawPile_.push_back(card.id);
     std::shuffle(drawPile_.begin(), drawPile_.end(), random_);
@@ -364,6 +442,22 @@ bool Scheduler::initial_deal(RoundId round, const PlayerOrder& order, int count)
     for (int n=0;n<count;++n) for (auto p:order) {
         hands[index(p)].push_back(pile.back()); pile.pop_back();
     }
+    for (const auto seat : order) {
+        auto& hand = hands[index(seat)];
+        for (const auto& effect : registry_.player_cards(seat)) {
+            const auto id = effect->definition();
+            if ((id != 3001 && id != 3002) || !effect->available() || !effect->usable()) continue;
+            const auto ordinary = [&](CardId card){ return !poker(card).isJoker; };
+            const auto anchor = std::find_if(hand.begin(),hand.end(),ordinary);
+            const auto payment = std::find_if(hand.rbegin(),hand.rend(),ordinary);
+            if (anchor == hand.end() || *anchor == *payment) continue;
+            const int wanted = *poker(*anchor).rank + (id == 3002 ? 1 : 0);
+            const auto matches = [&](CardId card){ return poker(card).rank == wanted; };
+            if (std::any_of(anchor+1,hand.end(),matches)) continue;
+            const auto replacement = std::find_if(pile.rbegin(),pile.rend(),matches);
+            if (replacement != pile.rend()) std::iter_swap(payment,replacement);
+        }
+    }
     for (auto& p:players_) p.hand.swap(hands[index(p.id)]);
     drawPile_.swap(pile); phase_=GamePhase::Playing;
     return true;
@@ -379,6 +473,69 @@ void Scheduler::play(Players p, const std::vector<CardId>& ids,
     for (auto id:ids) remaining.erase(std::find(remaining.begin(),remaining.end(),id));
     discarded_.reserve(discarded_.size()+ids.size());
     hand.swap(remaining); discarded_.insert(discarded_.end(),ids.begin(),ids.end());
+    const bool covering = table_.has_value() && lastPlayed_ != p;
+    auto& owner = player(p);
+    auto& opponent = player(lastPlayed_);
+    const bool chasing = covering && opponent.score > owner.score;
+    auto& used = usedSpecial_[index(p)];
+    auto& patterns = playedPatterns_[index(p)];
+    patterns.insert(option.pattern);
+    for (const auto& equipped : registry_.player_cards(p)) {
+        auto card = std::dynamic_pointer_cast<SpecialtyCard>(equipped);
+        if (!card || !card->available() || !card->usable()) continue;
+        const auto id = card->definition();
+        if (used.count(id)) continue;
+        ScoreValue reward = 0;
+        switch (id) {
+        case 2001: if (!savingsReady_[index(p)]) continue; reward=3; break;
+        case 3014:
+            if (!covering) continue;
+            if (const auto n=std::min<CoinValue>(2,opponent.coins)) {
+                out.emit(abilities::spend_coins(opponent,n,"酸糖扒手"));
+                out.emit(abilities::gain_coins(owner,n,"酸糖扒手"));
+            }
+            break;
+        case 3015:
+            if (!covering || option.pattern!=HandPattern::Straight) continue;
+            if (const auto n=std::clamp<ScoreValue>(opponent.score,0,2)) {
+                out.emit(abilities::subtract_score(opponent,n));
+                out.emit(abilities::add_score(owner,n));
+            }
+            break;
+        case 3020:
+            if (!covering || option.pattern!=HandPattern::Pair) continue;
+            if (!hand.empty() && opponent.hand.size()>=2 &&
+                std::any_of(opponent.hand.begin(),opponent.hand.end(),[&](CardId c){return c<=52;}))
+                candyChoice_=CandyChoice{++sequence_,CandyChoice::Kind::Steal,p,lastPlayed_,{}};
+            break;
+        case 3021: {
+            if (!covering || option.pattern!=HandPattern::StraightFlush || hand.empty()
+                || hammerUsed_[index(p)] || hammerHit_[index(lastPlayed_)]) continue;
+            auto owned=registry_.player_cards(lastPlayed_);
+            if (owned.size()<2) continue;
+            std::vector<std::pair<CoinValue,std::size_t>> eligible;
+            for (const auto& item : owned) {
+                for (const auto& def : config_.catalog)
+                    if (item->definition()==def.id && def.minimumShopLevel==1)
+                        eligible.emplace_back(def.price,card_slot(*item->reference()));
+            }
+            if (eligible.empty()) continue;
+            std::sort(eligible.begin(),eligible.end());
+            candyChoice_=CandyChoice{++sequence_,CandyChoice::Kind::Hammer,p,lastPlayed_,{}};
+            for (auto entry : eligible) candyChoice_->slots.push_back(entry.second);
+            continue;
+        }
+        case 3016:
+            if (!hand.empty() || std::any_of(players_.begin(),players_.end(),
+                    [p](const Player& other){return other.id!=p && other.hand.size()<2;})) continue;
+            reward=4; break;
+        case 3017: if (patterns.size()<3) continue; reward=5; break;
+        case 3018: if (!chasing) continue; reward=3; break;
+        default: continue;
+        }
+        used.insert(id);
+        if (reward) out.emit(abilities::add_score(owner,reward+card->bonus()));
+    }
     table_=option; tableCards_=ids; lastPlayed_=p; awaiting_=false; choice_.reset();
     if (hand.empty()) {
         roundLocked_=true;
@@ -474,6 +631,43 @@ void Scheduler::process(const Context& c, CardEffects& out) {
     }
     case EventType::SubmitChoiceRequest: {
         const auto& e=*c.event_as<SubmitChoiceRequest>();const auto p=actor();
+        if (candyChoice_) {
+            const auto pending=*candyChoice_;
+            if (pending.responder()!=p || pending.id!=e.choiceId || e.options.size()!=1)
+                throw std::invalid_argument("Invalid candy choice");
+            const auto answer=e.options.front();
+            auto& target=player(pending.defender);
+            if (pending.kind==CandyChoice::Kind::Sacrifice) {
+                if (answer>=pending.slots.size()) throw std::invalid_argument("Invalid sacrifice");
+                const auto slot=pending.slots[answer];
+                const auto ref=*registry_.at(target.id,slot)->reference();
+                auto& costs=paidCosts_[index(target.id)];
+                const auto paid=costs.find(ref.seq);
+                const auto refund=paid==costs.end()?0:paid->second/2;
+                out.emit(abilities::remove_function_card(registry_,target.id,slot,RemovalReason::Deleted));
+                costs.erase(ref.seq);
+                out.emit(abilities::gain_coins(target,refund,"焦糖碎锤"));
+                hammerUsed_[index(pending.attacker)]=hammerHit_[index(target.id)]=true;
+            } else {
+                if (answer>1) throw std::invalid_argument("Invalid decision");
+                if (answer && pending.kind==CandyChoice::Kind::Hammer) {
+                    candyChoice_->kind=CandyChoice::Kind::Sacrifice;
+                    candyChoice_->id=++sequence_;
+                    deadline_=now_+config_.choiceTime;
+                    break;
+                }
+                if (answer) {
+                    std::vector<CardId> eligible;
+                    for (auto id : target.hand) if (id<=52) eligible.push_back(id);
+                    const auto taken=eligible[std::uniform_int_distribution<std::size_t>(0,eligible.size()-1)(random_)];
+                    player(pending.attacker).hand.push_back(taken);
+                    target.hand.erase(std::find(target.hand.begin(),target.hand.end(),taken));
+                }
+            }
+            candyChoice_.reset();
+            emit<TurnEndedEvent>(out,[&](auto& x){x.actor=pending.attacker;x.player=pending.attacker;x.turnId=turn_;});
+            break;
+        }
         if(!choice_||choice_->player!=p||choice_->id!=e.choiceId||e.options.size()!=1||
             e.options[0]>=choice_->options.size())throw std::invalid_argument("Invalid choice");
         require_turn(p,choice_->turn);const auto selected=choice_->cards;
@@ -504,6 +698,7 @@ void Scheduler::process(const Context& c, CardEffects& out) {
             x.actor=p.id;x.turnId=e.turnId;x.player=p.id;x.handId=e.handId;x.reward=reward;});break;
     }
     case EventType::PlayRewardAfter: {
+        if (candyChoice_) { deadline_=now_+config_.choiceTime; break; }
         const auto& e=*c.event_as<PlayRewardGrantedEvent>();
         emit<TurnEndedEvent>(out,[&](auto& x){x.actor=e.player;x.turnId=e.turnId;x.player=e.player;});break;
     }
@@ -569,6 +764,9 @@ void Scheduler::process(const Context& c, CardEffects& out) {
         break;
     }
     case EventType::RoundRewardAfter:
+        for (auto& owner : players_)
+            owner.hand.erase(std::remove_if(owner.hand.begin(),owner.hand.end(),
+                [](CardId id){return id>54;}),owner.hand.end());
         if(round_>=config_.rounds) {
             phase_=GamePhase::Finished;winners_.clear();
             const auto best=std::max_element(players_.begin(),players_.end(),
@@ -599,14 +797,30 @@ void Scheduler::process(const Context& c, CardEffects& out) {
             use_consumable(p.id,consumable(product.definition),e.targetCard,out);
         } else {
             if(e.targetCard)throw std::invalid_argument("Function card purchase does not take a target");
+            if (product.upgrade) {
+                const auto owned = registry_.player_cards(p.id);
+                auto previous = std::find_if(owned.begin(),owned.end(),[&](const auto& card){
+                    return candy_family(card->definition())==candy_family(product.definition);
+                });
+                if (previous==owned.end()) throw std::logic_error("Upgrade target changed");
+                auto next=make_card(p,product.definition);
+                next->inherit_enhancements(**previous);
+                const auto ref=*(*previous)->reference();
+                auto& costs=paidCosts_[index(p.id)];
+                const auto total=costs.at(ref.seq)+cost;
+                registry_.replace(p.id,card_slot(ref),next);
+                costs[next->reference()->seq]=total;
+                costs.erase(ref.seq);
+            } else {
             std::size_t slot=0;while(slot<p.functionSlots&&registry_.at(p.id,slot))++slot;
             if(slot>=p.functionSlots)throw std::logic_error("Function slots full");
             auto card=make_card(p,product.definition);const auto cardSeq=card->reference()->seq;
             out.emit(abilities::equip_function_card(registry_,p,slot,std::move(card)));
             paidCosts_[index(p.id)][cardSeq]=cost;
+            }
         }
         out.emit(abilities::spend_coins(p,cost,"purchase"));
-        s.offers[offerSlot]={};if(s.locked&&*s.locked==offerSlot)s.locked.reset();
+        s.offers[offerSlot]={};price_family_offers(p.id,s);if(s.locked&&*s.locked==offerSlot)s.locked.reset();
         emit<ShopPurchasedEvent>(out,[&](auto& x){x.player=p.id;x.shopId=s.id;x.productId=e.productId;x.paid=cost;});
         if(product.kind==ShopProductKind::Consumable)
             emit<ConsumableUsedEvent>(out,[&](auto& x){x.player=p.id;x.shopId=s.id;x.productId=e.productId;
@@ -627,6 +841,7 @@ void Scheduler::process(const Context& c, CardEffects& out) {
         out.emit(abilities::gain_coins(player(e.player),value,"sale"));
         out.emit(abilities::remove_function_card(registry_,e.player,slot,RemovalReason::Sold));
         paidCosts_[index(e.player)].erase(e.card.seq);
+        price_family_offers(e.player,shops_[index(e.player)]);
         emit<ShopSoldEvent>(out,[&](auto& x){x.player=e.player;x.shopId=e.shopId;x.card=e.card;x.received=value;});break;
     }
     case EventType::RefreshShopRequest: {
@@ -694,6 +909,30 @@ void Scheduler::process(const Context& c, CardEffects& out) {
         if(e.ability.card.owner!=p)throw std::logic_error("Wrong ability owner");
         const auto selectedCard=registry_.at(p,card_slot(e.ability.card));
         if(!selectedCard->available()||!selectedCard->usable())throw std::logic_error("Card is unavailable");
+        if (selectedCard->definition()==3019) {
+            require_turn(p,turn_);
+            auto& owner=player(p);
+            if (choice_ || e.ability.seq!=1 || !e.selection.players.empty() ||
+                usedSpecial_[index(p)].count(3019) || owner.coins<2)
+                throw std::logic_error("Cannot activate candy mold");
+            std::vector<CardId> eligible;
+            for (auto id : owner.hand)
+                if (id<=54 && !poker(id).isJoker) eligible.push_back(id);
+            if (eligible.size()<2) throw std::logic_error("Need two original cards");
+            const auto strength=[&](CardId id){const int r=*poker(id).rank; return r==2?15:r;};
+            std::stable_sort(eligible.begin(),eligible.end(),[&](CardId a,CardId b){
+                return strength(a)>strength(b);
+            });
+            cards_.reserve(cards_.size()+2);
+            owner.hand.reserve(owner.hand.size()+2);
+            out.emit(abilities::spend_coins(owner,2,"双格糖模"));
+            for (unsigned i=0;i<2;++i) {
+                Poker copy=poker(eligible[i]); copy.id=cards_.size()+1;
+                cards_.push_back(copy); owner.hand.push_back(copy.id);
+            }
+            usedSpecial_[index(p)].insert(3019);
+            break;
+        }
         if(phase_==GamePhase::Shopping) {
             require_shop(p,shop(p).id);
             if(!selectedCard->subscriptions().test(static_cast<std::size_t>(EventType::ShopActionWindow)))
@@ -802,6 +1041,7 @@ void Scheduler::process(const Context& c, CardEffects& out) {
                 p.extraShopSlots=0;p.shopLevel=1;
                 for(std::size_t slot=0;slot<MAX_FUNCTION_SLOTS;++slot)registry_.unequip(p.id,slot);
             }
+            hammerUsed_={}; hammerHit_={}; candyChoice_.reset();
             paidCosts_={};shops_={};continueVotes_.fill(std::nullopt);newGameVotes_.fill(false);
             round_=1;config_.rounds=8;roundLocked_=false;table_.reset();choice_.reset();
             first_=static_cast<Players>(std::uniform_int_distribution<int>(0,3)(random_));
@@ -822,6 +1062,10 @@ void Scheduler::timeout() {
             auto e=std::make_unique<ShoppingDeadlineControl>();e->shopId=shops_[i].id;e->expectedVersion=round_;
             dispatch(std::move(e),meta);
         }
+    } else if(candyChoice_) {
+        auto e=std::make_unique<SubmitChoiceRequest>();
+        e->actor=candyChoice_->responder(); e->choiceId=candyChoice_->id; e->options={0};
+        dispatch(std::move(e),meta);
     } else if(phase_==GamePhase::Playing&&awaiting_) {
         auto e=std::make_unique<TurnDeadlineControl>();e->player=acting_;e->turnId=turn_;e->expectedVersion=turn_;
         dispatch(std::move(e),meta);

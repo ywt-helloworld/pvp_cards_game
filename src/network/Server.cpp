@@ -8,6 +8,7 @@
 #include <map>
 #include <sstream>
 #ifdef _WIN32
+#include <bcrypt.h>
 #else
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -53,9 +54,17 @@ struct Runtime {
     }
 };
 std::string token() {
+    std::array<std::uint32_t,4> words{};
+#ifdef _WIN32
+    if (BCryptGenRandom(nullptr,reinterpret_cast<PUCHAR>(words.data()),sizeof(words),
+                        BCRYPT_USE_SYSTEM_PREFERRED_RNG)!=0)
+        throw std::runtime_error("Cannot initialize session");
+#else
     std::random_device random;
+    for (auto& word : words) word=random();
+#endif
     std::ostringstream out;
-    for(int i=0;i<4;++i)out<<std::hex<<std::setw(8)<<std::setfill('0')<<random();
+    for (auto word : words) out<<std::hex<<std::setw(8)<<std::setfill('0')<<word;
     return out.str();
 }
 }
@@ -123,7 +132,7 @@ struct Server::Impl {
                     if(name.empty()||name.size()>128)throw std::invalid_argument("Invalid name");
                     std::size_t seat=0;while(seat<4&&!sessions[seat].name.empty())++seat;
                     if(seat==4)throw std::logic_error("Room is full");
-                    auto& session=sessions[seat];session.name=name;session.token=token();session.socket=socket;
+                    auto& session=sessions[seat];session.token=token();session.name=name;session.socket=socket;
                     it->second.seat=static_cast<Players>(seat);
                     send(socket,"{\"type\":\"welcome\",\"seat\":"+std::to_string(seat)+",\"token\":"+json_string(session.token)+"}");
                     if(std::all_of(sessions.begin(),sessions.end(),[](const auto& s){return !s.name.empty();}))

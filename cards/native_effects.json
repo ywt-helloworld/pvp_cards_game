@@ -10,35 +10,35 @@
     "include/ConsumableCards.hpp": "32388658e0e176db222c63fb3576f5bb9267f6fd5eb10ad6cd917c8b67a77e7d",
     "include/Context.hpp": "8d07d58598d7858876a23a4bb6d43f5bb821e4c838c6e4e9177e1c2dc02d15ca",
     "include/Event.hpp": "258f113a852d326a8f546f33c9ae190a7b8ab9569afbe178bc8393aa7adaf8bc",
-    "include/FunctionCards.hpp": "ed85f466fffbb8819edd1da0e6d1d4bd529bfe9fd0c5101224922e5545315323",
+    "include/FunctionCards.hpp": "45b0f17aa768725c6abf36f358c41e9f6d6637a1c8d1caf5f8418dfef5b43f96",
     "include/HandleEvent.hpp": "f7cb1b5539c455fb2b8ec0e575a71e9ca79219602fb9388ac2499131d3ceb04d",
     "include/Player.hpp": "38d86bf1409782d7760b05840c6d316277b7715d0075786efcb650e1a81d1963",
     "include/Poker.hpp": "ee6cc5af2fa3691e25dd2908a580e31c2733bf45533022493f67c6e262ac1c6d",
     "include/Register.hpp": "199edc1d1f1d8e2c405884d064b3d550218bdeb9164a40d6caf71fe270244ecf",
-    "include/Scheduler.hpp": "10f52676ce793af299616a73a3bc971920f8b6ba3bb76c77772bacfe628ac1ed",
-    "include/SystemCards.hpp": "8eca5a7be5243db6bbdab927681a7fddd0eb3fdcc8d942e3a097c94fbb183769",
+    "include/Scheduler.hpp": "bb9d9ac4f31374fa9126ec94386aa24ee04ed51328d70e40354be7f87169f3c6",
+    "include/SystemCards.hpp": "bfba346fb0ffc47b4b42bcc70a518a5fe9620ea2abb2772f9ab683fcb29336e8",
     "include/network/ListenEvent.hpp": "771edaa44ec720aaa4744741d6496826e05ad4623507e1daa02459c2fe3a23d3",
     "include/network/Protocol.hpp": "424d95f3a1b25111b223ed9f28652c8d5a2edbbe2a1396c85177c20bb5ab05dc",
     "include/network/Server.hpp": "216fbed71a85cba784c74c07e9f2e54264df81e425bb8fd23da46f384c053a66",
     "src/Abilities.cpp": "226b0fb6668576b1915901087fc0f15167223f0c0ef087107da060577ab86645",
     "src/CardCatalog.cpp": "e3c7738b7e7ba39ea2ecd4c4c189f85fc23ab250ef5a354ab10058082cbbaf8d",
     "src/Condition.cpp": "5a2847b03f2ed242271746bc8da6229a682a636d2a900556174a2c0cb90e9e40",
-    "src/FunctionCards.cpp": "cac1a62ed36aafc5ec5f8929d1c45b921a6b1d7b0691cd7685b721f606ebead2",
+    "src/FunctionCards.cpp": "5d5047565142b00dc3e9012db89c0e6f308930b2735862429f2efab3a56ffdae",
     "src/HandleEvent.cpp": "d30831571e09a7013a1aa824ea06f1f2facd09800e6cf3b4d4512dd850137da1",
     "src/Player.cpp": "c3a9ddf4aeae14709322bdb26021e6d004cef54c7f529a5e68fff52d0ef91efa",
     "src/Poker.cpp": "f80559d154cfc96f52904aa7e9e9f08f45f26e7b84f07b346871e2876d020944",
     "src/Register.cpp": "7f833c8a9dee6c325428903be963b20d826cc57ead6aa8b0b6cbb0d4797695c2",
-    "src/Scheduler.cpp": "ccae56a440f0a1ef19c4878facb51dd98980a9f821da70410a4ca29a6df247e4",
-    "src/SystemCards.cpp": "529c3cb6c426593093dff97c0f05e947c68607776d94cc537270d411b14362bd",
+    "src/Scheduler.cpp": "7a21c920b257015d8ca43d87c2314706986f5c2b5de224313ca47dbe6814f264",
+    "src/SystemCards.cpp": "5f9af086e13721678428afbd5eb5e965f1b708041f1ceac91ae89f4d97a0f28c",
     "src/main.cpp": "b914743c625e0e44a2a62bc98d90fd5c9e7f1a737151934b4f52e304e07e021b",
     "src/network/ListenEvent.cpp": "c193e88cf203ae5f0411e656f3589377cbbadb49616dc259c244f516310153a3",
-    "src/network/Protocol.cpp": "eb06f2c960e5d71702e896a0f8f7961d9ddba42670715b2e5b78ff3e366c71ee",
-    "src/network/Server.cpp": "5e367366b08004cb3dd7b8edba09064313c1bf1130d58a661328d3dad21c67d5",
-    "tools/import_function_card.py": "a662d58ec9263b1363fe1a1a5a5db93563393ae854d72475b2bf1d3b2edd606c"
+    "src/network/Protocol.cpp": "88f7a83ef230221aa8bb7a71c84b9e70567ba7f6b4e285185408f37e83e1cea8",
+    "src/network/Server.cpp": "85507c8a4503d7e976438dfed26291863d38feb005a886a2d4f204e560603488",
+    "tools/import_function_card.py": "c77857f17c21b0edd6416a9eb6b205e30e26b905fd726f0c85fdb285418cf556"
   },
   "cards": [
     {
-      "name": "Demo function cards 1-10, including numeric enhancements",
+      "name": "Candy play and pass rewards, including limited pattern rewards and numeric enhancements",
       "abilities": [
         {
           "event": "PlayCommitted",
@@ -161,14 +161,20 @@
           "emits": [
             "RoundWinnerLocked",
             "PlayCommitted",
-            "ChoiceOpened"
+            "ChoiceOpened",
+            "ScoreChanged",
+            "CoinsChanged"
           ]
         },
         {
           "event": "SubmitChoiceRequest",
           "emits": [
             "RoundWinnerLocked",
-            "PlayCommitted"
+            "PlayCommitted",
+            "TurnEnd",
+            "FunctionCardRemoved",
+            "ScoreChanged",
+            "CoinsChanged"
           ]
         },
         {
@@ -327,7 +333,8 @@
           "event": "ActivateAbilityRequest",
           "emits": [
             "ShopActionWindow",
-            "PlayActionWindow"
+            "PlayActionWindow",
+            "CoinsChanged"
           ]
         },
         {

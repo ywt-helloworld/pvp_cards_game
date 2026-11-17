@@ -31,8 +31,10 @@ try {
   await p.screenshot({path:'../test-results/desktop-shop.png',fullPage:true});
   await p.setViewportSize({width:844,height:390});
   await p.screenshot({path:'../test-results/mobile-shop.png',fullPage:true});
+  const offerText = await p.locator('.function-card:has(.buy:enabled) .effect').first().textContent();
+  assert.ok(offerText.trim());
   await p.locator('.buy:enabled').first().click();await p.locator('.owned-card').waitFor();
-  assert.match(await p.locator('.owned-card').textContent(),/自己.*后/);
+  assert.equal(await p.locator('.owned-card small').first().textContent(),offerText);
   const purchasedEffect=await p.locator('.owned-card small').first().textContent();
   await p.locator('.owned-face').first().click();
   assert.equal(await p.locator('#functionDescription').textContent(),purchasedEffect);
@@ -60,6 +62,21 @@ try {
   const actor=await (async()=>{for(const page of pages)if(await page.getByRole('heading',{name:'轮到你出牌',exact:true}).count())return page;})();
   assert.ok(actor,'server selected an acting player');
   const selectedCard=actor.locator('.hand .poker:not(.joker)').first();
+  if (app) {
+    const room = [...app.rooms.values()][0];
+    const player = [...room.players].find(s => s.state.acting === s.seat);
+    const snapshot = { ...player.state, room: room.code };
+    const playButton = actor.locator('[data-do="play"]');
+    player.socket.emit('state', { ...snapshot, candyPending: true });
+    await actor.getByText('等待功能牌选择', { exact: true }).waitFor();
+    await selectedCard.click();
+    assert.equal(await selectedCard.getAttribute('aria-pressed'), 'true');
+    assert.ok(await playButton.isDisabled(), 'a pending candy choice must keep play disabled after selection');
+    player.socket.emit('state', snapshot);
+    await actor.getByText('等待功能牌选择', { exact: true }).waitFor({ state: 'hidden' });
+    assert.ok(await playButton.isEnabled(), 'the selected card is playable when the choice closes');
+    await selectedCard.click();
+  }
   const originalHandCard=await selectedCard.elementHandle();
   await selectedCard.click();
   assert.equal(await selectedCard.getAttribute('aria-pressed'),'true');

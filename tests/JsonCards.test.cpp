@@ -65,7 +65,7 @@ int main() {
     bool purchased=false;
     for(unsigned seed=0;seed<30&&!purchased;++seed) {
         std::array<Player,4> initial{Player(Players::P1,"one"),Player(Players::P2,"two"),Player(Players::P3,"three"),Player(Players::P4,"four")};
-        initial[0].shopLevel=2;SchedulerConfig config;config.seed=seed;config.consumableChance=0;
+        initial[0].shopLevel=2;initial[0].coins=12;SchedulerConfig config;config.catalog=catalog;config.seed=seed;config.consumableChance=0;
         Scheduler game(std::move(initial),config);
         const auto& offers=game.shop(p.id).offers;
         const auto offer=std::find_if(offers.begin(),offers.end(),[](const auto& o){return o.definition==2001;});
