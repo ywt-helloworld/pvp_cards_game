@@ -21,7 +21,7 @@
     "include/network/Protocol.hpp": "424d95f3a1b25111b223ed9f28652c8d5a2edbbe2a1396c85177c20bb5ab05dc",
     "include/network/Server.hpp": "216fbed71a85cba784c74c07e9f2e54264df81e425bb8fd23da46f384c053a66",
     "src/Abilities.cpp": "226b0fb6668576b1915901087fc0f15167223f0c0ef087107da060577ab86645",
-    "src/CardCatalog.cpp": "e3c7738b7e7ba39ea2ecd4c4c189f85fc23ab250ef5a354ab10058082cbbaf8d",
+    "src/CardCatalog.cpp": "93ff80b70797e42500df7f21b1b39e92060af9567deef5f264317aa5467b997f",
     "src/Condition.cpp": "5a2847b03f2ed242271746bc8da6229a682a636d2a900556174a2c0cb90e9e40",
     "src/FunctionCards.cpp": "5d5047565142b00dc3e9012db89c0e6f308930b2735862429f2efab3a56ffdae",
     "src/HandleEvent.cpp": "d30831571e09a7013a1aa824ea06f1f2facd09800e6cf3b4d4512dd850137da1",

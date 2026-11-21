@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "type": "function",
+  "id": 2003,
+  "key": "frugal_shopper",
+  "name": "精打细算",
+  "price": 4,
+  "minimum_shop_level": 1,
+  "description": "进入商店时获得 1 金币；自己刷新商店的价格降低 1 金币（不会低于 1 金币）。",
+  "abilities": [
+    {
+      "event": "ShopEnter",
+      "scope": "self",
+      "op": "gain_coins",
+      "amount": 1
+    },
+    {
+      "event": "ShopRefreshQuote",
+      "scope": "self",
+      "op": "reduce_shop_cost",
+      "amount": 1,
+      "minimum": 1
+    }
+  ]
+}

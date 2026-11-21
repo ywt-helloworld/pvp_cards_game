@@ -16,11 +16,12 @@ class ChecksTest(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup)
         self.root=Path(self.temp.name).resolve()
-        for name in ['tools/import_function_card.py','cards/function/steady_income.json',
-                     'include/cards/generated/steady_income.hpp','src/cards/generated/steady_income.cpp',
-                     'cards/function/lightfooted.json','include/cards/generated/lightfooted.hpp',
-                     'src/cards/generated/lightfooted.cpp','src/CardCatalog.cpp']:
+        for name in ['tools/import_function_card.py','src/CardCatalog.cpp']:
             dest=self.root/name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copyfile(ROOT/name,dest)
+        for pattern in ['cards/function/*.json','include/cards/generated/*.hpp','src/cards/generated/*.cpp']:
+            for source in ROOT.glob(pattern):
+                dest=self.root/source.relative_to(ROOT);dest.parent.mkdir(parents=True,exist_ok=True)
+                shutil.copyfile(source,dest)
         (self.root/'docs').mkdir()
         (self.root/'README.md').write_text('[design](design.md)\n',encoding='utf-8')
         (self.root/'design.md').write_text('# Design\n',encoding='utf-8')
