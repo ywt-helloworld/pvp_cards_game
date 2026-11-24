@@ -50,7 +50,6 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
   gap:4px;
   width:100%;
   padding:0 0 5px;
-  border-bottom:1px solid var(--accent-line);
   color:var(--accent);
   font-size:10px;
   font-weight:750;
