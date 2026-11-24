@@ -137,7 +137,12 @@ function offerView(g,me,off,o) {
   if(!o.product) return '<div class="empty-offer"><span aria-hidden="true">✦</span><strong>已售出</strong><small>刷新商店补充新牌</small></div>';
   const consumable=o.kind==='consumable', targets=o.targets||[];
   const unavailable=off||me.coins<o.price||(!consumable&&!o.upgrade&&me.cards.length>=g.self.functionSlots)||(o.needsTarget&&!targets.length);
-  return `<article class="function-card ${consumable?'consumable':''} ${o.locked?'locked':''}"><div class="card-type"><span>${consumable?'消耗牌':'功能牌'}</span><span>${o.locked?'已锁定':`NO. ${String(o.definition).padStart(2,'0')}`}</span></div><button class="card-face" data-offer="${o.slot}" aria-haspopup="dialog"><span class="card-emblem" aria-hidden="true">${consumable?'✦':suits[o.definition%4]}</span><strong>${cardLabel(o)}</strong><span class="effect">${esc(effectText(o))}</span><span class="card-lifetime">${consumable?'购买即生效':'放入槽位 · 持续生效'}</span></button>
+  return `<article class="function-card ${consumable?'consumable':''} ${o.locked?'locked':''}"><button class="card-face" data-offer="${o.slot}" aria-haspopup="dialog">
+      <strong>${cardLabel(o)}</strong>
+      <span class="card-type"><span>${consumable?'消耗牌':'功能牌'}</span><span>${o.locked?'已锁定':`NO. ${String(o.definition).padStart(2,'0')}`}</span></span>
+      <span class="card-art" aria-hidden="true"></span>
+      <span class="effect">${esc(effectText(o))}</span>
+    </button>
     ${o.needsTarget?`<label class="target-label">强化目标<select data-target-product="${o.product}" aria-label="${esc(o.name)}的强化目标"><option value="">请选择功能牌</option>${targets.map(seq=>{const c=me.cards.find(c=>c.seq===seq);return `<option value="${seq}" ${enhancementTargets.get(o.product)===seq?'selected':''}>槽 ${(c?.slot??0)+1} · ${cardLabel(c)} +${c?.enhancementLevel??0}</option>`;}).join('')}</select></label>`:''}
     <div class="card-bottom"><div class="price">${o.price} <small>糖果</small></div><div class="card-actions"><button class="buy" data-do="buy" data-slot="${o.slot}" ${disabled(unavailable)}>${consumable?'购买并使用':o.upgrade?'补差升级':'购买'}</button><button class="lock-button" data-do="${o.locked?'unlock':'lock'}" data-slot="${o.slot}" ${disabled(off)}>${o.locked?'解锁':'锁定'}</button></div></div></article>`;
 }
