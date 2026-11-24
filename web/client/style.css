@@ -17,18 +17,19 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 .stage{margin-top:16px;padding:20px;background:var(--panel);border:2px solid var(--edge);border-radius:10px;box-shadow:0 4px 0 var(--deep)}.stage-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px}.stage-heading h2{font-size:22px;letter-spacing:1px;margin:0}.timer{font-size:15px;font-weight:750;color:var(--gold);font-variant-numeric:tabular-nums;background:var(--deep);border:1px solid #69765a;border-radius:5px;padding:7px 12px;white-space:nowrap}
 /* Cream cards, small suit emblems and warm price tickets on the green shelf. */
 .shop-layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);gap:24px}.shop-summary{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px}.wallet{display:flex;gap:12px;align-items:center;color:var(--gold);padding:6px 12px;border:1px solid #947f4b;background:#18372d;border-radius:5px}.wallet small{font-size:10px}.wallet strong{font-size:23px;line-height:1.1;font-variant-numeric:tabular-nums}.offers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:stretch}
-/* Shop cards: dark type band, light reading area, and a distinct price tag. */
+/* Shop cards: light surfaces, with type shown through the frame and labels. */
 .function-card{
   --accent:#174d42;
   --accent-tint:#e8f1eb;
   --accent-line:#a5bcb0;
+  --accent-frame:#527668;
   display:flex;
   flex-direction:column;
   min-width:0;
   padding:8px;
   color:#1d302a;
   background:#f3ead7;
-  border:2px solid #cbbd9c;
+  border:2px solid var(--accent-frame);
   border-radius:10px;
   box-shadow:0 4px 0 #102e28;
   transition:transform .15s,border-color .15s;
@@ -37,7 +38,7 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
   --accent:#5b356a;
   --accent-tint:#f0e9f4;
   --accent-line:#c3aecb;
-  border-color:var(--accent-line);
+  --accent-frame:#805a8d;
 }
 .function-card.locked{border-color:var(--gold);outline:2px solid #a47f43;outline-offset:1px}
 .card-type{
@@ -47,15 +48,14 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
   gap:4px;
   padding:4px 7px;
   margin-bottom:5px;
-  border-radius:4px;
-  color:#fffaf0;
-  background:var(--accent);
+  border-bottom:1px solid var(--accent-line);
+  color:var(--accent);
   font-size:10px;
   font-weight:750;
   line-height:1.35;
 }
 .card-type span:last-child{white-space:nowrap;font-variant-numeric:tabular-nums}
-.locked .card-type span:last-child{color:#ffe092}
+.locked .card-type span:last-child{color:#654519}
 .card-face{
   display:flex;
   flex:1;
@@ -117,10 +117,10 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 .price small{font-size:10px;font-weight:700}
 .card-actions{display:flex;gap:5px}
 .card-actions button{padding:8px 6px;font-size:11px;box-shadow:0 2px 0 #a5ab91}
-.card-actions .buy{flex:1;min-width:0;line-height:1.25;overflow-wrap:anywhere;background:var(--accent);border-color:var(--accent);color:#fffaf0;font-weight:700}
+.card-actions .buy{flex:1;min-width:0;line-height:1.25;overflow-wrap:anywhere;background:var(--accent-tint);border-color:var(--accent);color:var(--accent);font-weight:700}
 .card-actions .lock-button{flex:none;white-space:nowrap;color:#2a443b;background:transparent;border-color:#85988d;box-shadow:none}
 @media(hover:hover){
-  .card-actions .buy:hover:not(:disabled){background:#142c26;border-color:#142c26}
+  .card-actions .buy:hover:not(:disabled){background:#fffbef}
   .card-actions .lock-button:hover:not(:disabled){background:#fffaf0}
 }
 .empty-offer{display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;min-height:265px;border:2px dashed #789077;border-radius:9px;background:#163d34;color:var(--muted);text-align:center}.empty-offer>span{font-size:30px;color:#8caa8c}.empty-offer strong{font-size:13px}.empty-offer small{font-size:10px}
