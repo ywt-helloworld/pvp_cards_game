@@ -11,7 +11,8 @@ test('gateway accepts only typed operations, never actor or system events', () =
   assert.equal(command({kind:'buy',shop:1,slot:2,product:7,target:4,actor:3}),'BUY 1 2 7 4');
   assert.throws(()=>command({kind:'buy',shop:1,slot:2,product:7,target:-1}));
   for (const data of [{kind:'SCORE'}, {kind:'play',turn:1,cards:[1,1]},
-    {kind:'done',shop:'1\nNEW'}, {kind:'upgrade',shop:1,pattern:5}]) assert.throws(()=>command(data));
+    {kind:'done',shop:'1\nNEW'}, {kind:'upgrade',shop:1,pattern:5},
+    {kind:'lock',shop:1,slot:0}, {kind:'unlock',shop:1,slot:0}]) assert.throws(()=>command(data));
 });
 async function until(fn, description, ms=10000) {
   const end=Date.now()+ms;

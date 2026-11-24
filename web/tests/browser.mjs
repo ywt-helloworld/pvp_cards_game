@@ -31,19 +31,24 @@ try {
   await p.screenshot({path:'../test-results/desktop-shop.png',fullPage:true});
   await p.setViewportSize({width:844,height:390});
   await p.screenshot({path:'../test-results/mobile-shop.png',fullPage:true});
-  const offerText = await p.locator('.function-card:has(.buy:enabled) .effect').first().textContent();
+  const shopCard=p.locator('.function-card[data-do="buy"]:enabled').first();
+  const offerText=await shopCard.locator('.effect').textContent();
+  assert.equal(await shopCard.locator('.price, button').count(),0,'price is outside the single purchase control');
+  assert.match(await shopCard.locator('xpath=following-sibling::*[1]').textContent(),/\d+\s*糖果/);
+  assert.equal(await p.locator('[data-do="lock"], [data-do="unlock"]').count(),0);
   assert.ok(offerText.trim());
-  await p.locator('.buy:enabled').first().click();await p.locator('.owned-card').waitFor();
+  await shopCard.click();await p.locator('.owned-card').waitFor();
   assert.equal(await p.locator('.owned-card small').first().textContent(),offerText);
   const purchasedEffect=await p.locator('.owned-card small').first().textContent();
   await p.locator('.owned-face').first().click();
   assert.equal(await p.locator('#functionDescription').textContent(),purchasedEffect);
   await p.locator('#closeFunction').click();
   if(app) {
-    await pages[1].getByRole('button',{name:'购买并使用',exact:true}).click();
+    // The seeded shop puts each player's consumable in slot 2.
+    await pages[1].locator('button.function-card.consumable[data-do="buy"][data-slot="2"]:enabled').click();
     await pages[1].waitForFunction(()=>document.querySelectorAll('.offers > *').length===4);
     assert.equal(await pages[1].locator('.owned-card').count(),0);
-    await pages[2].getByRole('button',{name:'购买并使用',exact:true}).click();
+    await pages[2].locator('button.function-card.consumable[data-do="buy"][data-slot="2"]:enabled').click();
     await pages[2].waitForFunction(()=>document.querySelector('.shop-layout .muted').textContent.includes('Lv.2'));
   }
   for(const page of pages)await page.locator('[data-do="done"]').click();
