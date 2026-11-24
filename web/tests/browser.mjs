@@ -44,10 +44,11 @@ try {
   assert.equal(await p.locator('#functionDescription').textContent(),purchasedEffect);
   await p.locator('#closeFunction').click();
   if(app) {
-    await pages[1].getByRole('button',{name:'购买并使用',exact:true}).click();
+    // The seeded shop puts each player's consumable in slot 2.
+    await pages[1].locator('button.function-card.consumable[data-do="buy"][data-slot="2"]:enabled').click();
     await pages[1].waitForFunction(()=>document.querySelectorAll('.offers > *').length===4);
     assert.equal(await pages[1].locator('.owned-card').count(),0);
-    await pages[2].getByRole('button',{name:'购买并使用',exact:true}).click();
+    await pages[2].locator('button.function-card.consumable[data-do="buy"][data-slot="2"]:enabled').click();
     await pages[2].waitForFunction(()=>document.querySelector('.shop-layout .muted').textContent.includes('Lv.2'));
   }
   for(const page of pages)await page.locator('[data-do="done"]').click();
