@@ -139,7 +139,7 @@ function offerView(g,me,off,o) {
   const unavailable=off||me.coins<o.price||(!consumable&&!o.upgrade&&me.cards.length>=g.self.functionSlots)||(o.needsTarget&&!targets.length);
   return `<article class="function-card ${consumable?'consumable':''} ${o.locked?'locked':''}"><button class="card-face" data-offer="${o.slot}" aria-haspopup="dialog">
       <strong>${cardLabel(o)}</strong>
-      <span class="card-type"><span class="card-kind-visually-hidden">${consumable?'消耗牌':'功能牌'}</span><span>${o.locked?'已锁定':`NO. ${String(o.definition).padStart(2,'0')}`}</span></span>
+      <span class="card-type"><span class="card-kind-visually-hidden">${consumable?'消耗牌':'功能牌'}</span><span>${o.locked?'已锁定':''}</span></span>
       <span class="card-art" aria-hidden="true"></span>
       <span class="effect">${esc(effectText(o))}</span>
     </button>
