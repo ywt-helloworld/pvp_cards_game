@@ -19,7 +19,6 @@ export function command(a) {
     case 'buy': return `BUY ${shop()} ${integer(a.slot, 5)} ${integer(a.product)}${a.target == null ? '' : ` ${integer(a.target)}`}`;
     case 'sell': return `SELL ${shop()} ${integer(a.seq)}`;
     case 'refresh': return `REFRESH ${shop()}`;
-    case 'lock': case 'unlock': return `${a.kind.toUpperCase()} ${shop()} ${integer(a.slot, 5)}`;
     case 'upgrade': return `UPGRADE ${shop()} ${integer(a.pattern, 4)}`;
     case 'facility': return `FACILITY ${shop()} ${integer(a.definition, 8)}`;
     case 'play': return `PLAY ${integer(a.turn)} ${cards()}`;

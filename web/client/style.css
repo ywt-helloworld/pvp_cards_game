@@ -18,6 +18,7 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 /* Cream cards, small suit emblems and warm price tickets on the green shelf. */
 .shop-layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);gap:24px}.shop-summary{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px}.wallet{display:flex;gap:12px;align-items:center;color:var(--gold);padding:6px 12px;border:1px solid #947f4b;background:#18372d;border-radius:5px}.wallet small{font-size:10px}.wallet strong{font-size:23px;line-height:1.1;font-variant-numeric:tabular-nums}.offers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:stretch}
 /* Shop cards: light surfaces, with type shown through the frame and labels. */
+.shop-offer{display:flex;flex-direction:column;align-self:start;min-width:0}
 .function-card{
   --accent:#174d42;
   --accent-tint:#e8f1eb;
@@ -28,6 +29,7 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
   min-width:0;
   /* Prefer the taller frame without clipping longer descriptions. */
   aspect-ratio:1 / 1.54;
+  width:100%;
   padding:8px;
   color:#1d302a;
   background:#f3ead7;
@@ -42,22 +44,7 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
   --accent-line:#c3aecb;
   --accent-frame:#805a8d;
 }
-.function-card.locked{border-color:var(--gold);outline:2px solid #a47f43;outline-offset:1px}
-.card-type{
-  display:flex;
-  justify-content:flex-end;
-  align-items:center;
-  gap:4px;
-  width:100%;
-  padding:0 0 5px;
-  color:var(--accent);
-  font-size:10px;
-  font-weight:750;
-  line-height:1.35;
-}
 .card-kind-visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
-.card-type span:last-child{white-space:nowrap;font-variant-numeric:tabular-nums}
-.locked .card-type span:last-child{color:#654519}
 .card-face{
   display:flex;
   flex:1 0 auto;
@@ -74,11 +61,9 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
   box-shadow:none;
 }
 .function-card.consumable .card-face{border-style:dashed;border-color:var(--accent-frame)}
-.card-face:active:not(:disabled){transform:scale(.97);box-shadow:none}
-.function-card button:focus-visible,.function-card select:focus-visible{
-  outline:2px solid var(--accent);
-  outline-offset:2px;
-}
+.function-card:active:not(:disabled){transform:translateY(2px)}
+.function-card:disabled{opacity:.7}
+.function-card:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
 /* Reserved for future artwork; remains blank for now. */
 .card-art{flex:1 0 42px;width:100%}
 .card-face strong{
@@ -89,30 +74,8 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
   overflow-wrap:anywhere;
 }
 .card-face .effect{display:block;width:100%;min-width:0;font-size:12px;line-height:1.65;text-align:left;overflow-wrap:anywhere}
-.card-bottom{padding-top:9px}
-.price{
-  width:fit-content;
-  margin:0 auto 7px;
-  padding:2px 9px;
-  border:1px solid #aa7b31;
-  border-radius:4px;
-  background:#ffe09a;
-  color:#422a10;
-  font-size:20px;
-  font-weight:800;
-  line-height:1.2;
-  white-space:nowrap;
-  font-variant-numeric:tabular-nums;
-}
-.price small{font-size:10px;font-weight:700}
-.card-actions{display:flex;gap:5px}
-.card-actions button{padding:8px 6px;font-size:11px;box-shadow:0 2px 0 #a5ab91}
-.card-actions .buy{flex:1;min-width:0;line-height:1.25;overflow-wrap:anywhere;background:var(--accent-tint);border-color:var(--accent);color:var(--accent);font-weight:700}
-.card-actions .lock-button{flex:none;white-space:nowrap;color:#2a443b;background:transparent;border-color:#85988d;box-shadow:none}
-@media(hover:hover){
-  .card-actions .buy:hover:not(:disabled){background:#fffbef}
-  .card-actions .lock-button:hover:not(:disabled){background:#fffaf0}
-}
+.shop-offer .price{margin:8px 0 0;color:var(--gold);font-size:16px;font-weight:800;line-height:1.25;text-align:center;font-variant-numeric:tabular-nums}
+.shop-offer .price small{font-size:11px;font-weight:700}
 .empty-offer{display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;min-height:265px;border:2px dashed #789077;border-radius:9px;background:#163d34;color:var(--muted);text-align:center}.empty-offer>span{font-size:30px;color:#8caa8c}.empty-offer strong{font-size:13px}.empty-offer small{font-size:10px}
 .shop-operations{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap}.shop-operations .primary{margin-left:auto}.shop-operations button{min-height:40px}.shop-workbench{min-width:0;background:#15392f;border:1px solid #57765e;border-radius:8px;padding:16px}.section-label{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:13px;font-weight:750;color:#e9e5c9;margin:0 0 12px}.section-label>span{color:var(--gold);font-size:12px}.section-label>small{font-size:10px;color:var(--muted);font-weight:400}
 .inventory{display:grid;gap:7px;margin-bottom:20px}.inventory-empty{text-align:center;padding:18px 10px 22px;border:1px dashed #67836a;border-radius:6px;color:var(--muted)}.inventory-empty>span{font-size:30px;color:#a1b88c}.inventory-empty p{margin:8px 0 4px;font-size:12px}.inventory-empty small{font-size:10px}.owned-card{min-width:0;display:flex;align-items:center;gap:8px;background:#234c3f;border:1px solid #698267;border-radius:6px;padding:5px}.owned-face{min-width:0;text-align:left;background:transparent;border:0;padding:6px;box-shadow:none;flex:1}.owned-face strong{font-size:12px}.owned-face small{display:block;font-size:11px;color:#d7dfc9;line-height:1.65;margin-top:4px}.sell-button{padding:7px 9px;font-size:10px;background:transparent;border-color:#809173;box-shadow:none}
@@ -127,14 +90,14 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 .toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);z-index:200;background:#f3d696;color:#324134;border:2px solid #fff0bd;border-radius:8px;padding:12px 20px;max-width:90vw;box-shadow:0 6px 20px #0005;font-size:13px}.toast.bad{background:#f1bdab;border-color:#fad4bd}.result{text-align:center;padding:26px}.result h2{color:var(--gold);font-size:30px}.scoreboard{width:min(500px,100%);border-collapse:collapse;margin:20px auto}.scoreboard td{border-bottom:1px solid var(--edge);padding:12px}
 .dialog-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}.dialog-head h2{margin:0;font-size:18px}.dialog-head .eyebrow{margin:0}dialog{width:min(620px,92vw);max-height:86dvh;background:var(--panel);color:var(--paper);border:2px solid #859773;border-radius:10px;box-shadow:0 10px 0 #0a241db3;padding:24px}dialog::backdrop{background:#071b16c9;backdrop-filter:blur(3px)}.rules-text{font-size:13px;color:#d5dfca;line-height:1.9}.choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px;max-height:45dvh;overflow:auto}.choice-option{text-align:left;font-size:12px;line-height:1.7}.choice-option small{display:block;color:var(--muted)}.choice-pages{display:flex;gap:10px;align-items:center;justify-content:center;margin-top:12px}
 #functionDialog{width:min(430px,92vw)}.detail-emblem{font:44px/1 Georgia,serif;text-align:center;color:var(--gold)}#functionTitle{text-align:center;font-size:22px;margin:14px 0}.detail-effect{padding:18px;background:var(--paper);color:var(--ink);border:1px solid #bac3a5;border-radius:6px;font-size:15px;line-height:1.9;white-space:pre-line}
-@media(hover:hover){button:hover:not(:disabled){background:#436854}button.primary:hover:not(:disabled){background:#ffdc8f}.function-card:hover{transform:translateY(-3px)}.hand .poker:hover{border-color:#d3b97e}button.poker:hover{background:#fff7df}button.card-face:hover{background:#fffdf4}button.equipped-card:hover{background:#fff5d6}button.owned-face:hover{background:#365d49}}
+@media(hover:hover){button:hover:not(:disabled){background:#436854}button.primary:hover:not(:disabled){background:#ffdc8f}.function-card:hover:not(:disabled){transform:translateY(-3px);background:#f3ead7}.function-card:hover:not(:disabled) .card-face{background:#fffdf4}.hand .poker:hover{border-color:#d3b97e}button.poker:hover{background:#fff7df}button.equipped-card:hover{background:#fff5d6}button.owned-face:hover{background:#365d49}}
 /* Compact landscape layout keeps the hand controls within a 844 x 390 viewport. */
 @media(max-width:1000px) and (orientation:landscape){
 .topbar{height:40px;padding:0 14px}.brand{font-size:17px;gap:6px}.brand-mark{font-size:22px}.brand-caption{font-size:9px;letter-spacing:1px}.toptools{gap:4px}.toptools button{font-size:11px;padding:5px 8px}
 .entry{min-height:calc(100dvh - 40px);grid-template-columns:1fr 320px;gap:30px;padding:20px 30px}.entry h1{font-size:34px;margin:12px 0}.plain-demo{margin-top:14px}.plain-demo>span{padding:8px 14px}.join-panel{padding:16px;gap:5px}.join-panel h2{font-size:19px}.join-panel label{margin-top:5px}input{padding:8px}
 .game{padding:0 12px 12px}.roomline{padding:5px 0;font-size:10px}.roomline .quiet{font-size:10px;padding:2px 6px}.players{gap:6px}.player{padding:6px 8px}.player-name{font-size:11px}.player-name small{font-size:9px}.player-stats{font-size:10px;gap:9px;margin-top:4px}.player-cards{display:none}
 .stage{margin-top:9px;padding:12px}.stage-heading{margin-bottom:10px}.stage-heading h2{font-size:18px}.stage-heading .eyebrow{font-size:8px;margin-bottom:4px}.timer{font-size:12px;padding:5px 9px}
-.shop-layout{grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);gap:14px}.shop-summary{margin-bottom:10px}.wallet{padding:4px 9px}.wallet strong{font-size:19px}.offers{gap:8px}.function-card{padding:6px}.card-face{padding:9px 6px;gap:7px}.card-art{flex-basis:32px}.card-face strong{font-size:12px}.card-face .effect{font-size:11px}.card-type{font-size:8px}.card-bottom{padding-top:8px}.price{font-size:18px;margin-bottom:7px}.card-actions button{padding:8px 5px;font-size:10px}.empty-offer{min-height:225px}
+.shop-layout{grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);gap:14px}.shop-summary{margin-bottom:10px}.wallet{padding:4px 9px}.wallet strong{font-size:19px}.offers{gap:8px}.function-card{padding:6px}.card-face{padding:9px 6px;gap:7px}.card-art{flex-basis:32px}.card-face strong{font-size:12px}.card-face .effect{font-size:11px}.shop-offer .price{font-size:14px;margin-top:6px}.empty-offer{min-height:225px}
 .shop-workbench{padding:12px}.section-label{font-size:12px;margin-bottom:9px}.inventory{margin-bottom:14px}.inventory-empty{padding:10px 8px}.inventory-empty>span{font-size:23px}.upgrade{padding:8px 5px;gap:4px}.upgrades{gap:6px}.upgrade span{font-size:9px}.facility{margin-top:12px;padding-top:10px}.shop-operations{margin-top:13px;gap:8px}.shop-operations button{padding:8px 10px;font-size:11px;min-height:36px}
 .play-layout{grid-template-columns:minmax(0,1fr) 220px;gap:10px;margin-top:9px}.play-layout .stage{padding:9px 11px}.play-layout .stage-heading{margin-bottom:5px}.play-layout .stage-heading h2{font-size:14px}.table{min-height:52px;padding:5px;flex-direction:row;flex-wrap:wrap;gap:7px}.table-label{font-size:10px}.table .poker{width:33px;flex-basis:33px;height:44px;padding:4px;font-size:15px;border-radius:4px}.table .poker .suit{font-size:12px}.table .poker.joker{font-size:11px}.table .poker small{font-size:7px}
 .hand-section{padding:7px 2px 0}.hand-heading{font-size:11px}.hand-heading .quiet{font-size:10px;padding:4px 6px}.selection-count{font-size:9px;padding:3px 5px;margin-left:4px}.hand{min-height:97px;padding:15px 3px 8px;gap:6px}.poker{width:51px;flex-basis:51px;height:74px;font-size:22px;padding:6px}.poker .suit{font-size:20px}.poker.joker{font-size:14px}.actionbar{gap:7px;margin-top:5px}.actionbar>button{padding:8px 12px;font-size:12px}.action-hint{font-size:10px}

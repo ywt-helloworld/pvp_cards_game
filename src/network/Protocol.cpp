@@ -170,10 +170,6 @@ EventPtr parse_request(Players actor,const std::string& command) {
         e.card.owner=actor;read(input,e.shopId);read(input,e.card.seq);
     }else if(verb=="REFRESH"){
         auto& e=static_cast<RefreshShopRequest&>(create(EventType::RefreshShopRequest));read(input,e.shopId);
-    }else if(verb=="LOCK"){
-        auto& e=static_cast<LockShopSlotRequest&>(create(EventType::LockShopSlotRequest));read(input,e.shopId);read(input,e.slotId);
-    }else if(verb=="UNLOCK"){
-        auto& e=static_cast<UnlockShopSlotRequest&>(create(EventType::UnlockShopSlotRequest));read(input,e.shopId);read(input,e.slotId);
     }else if(verb=="UPGRADE"){
         auto& e=static_cast<UpgradeHandPatternRequest&>(create(EventType::UpgradeHandPatternRequest));
         unsigned pattern;read(input,e.shopId);read(input,pattern);
