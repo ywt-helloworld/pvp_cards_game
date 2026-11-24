@@ -17,9 +17,112 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 .stage{margin-top:16px;padding:20px;background:var(--panel);border:2px solid var(--edge);border-radius:10px;box-shadow:0 4px 0 var(--deep)}.stage-heading{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px}.stage-heading h2{font-size:22px;letter-spacing:1px;margin:0}.timer{font-size:15px;font-weight:750;color:var(--gold);font-variant-numeric:tabular-nums;background:var(--deep);border:1px solid #69765a;border-radius:5px;padding:7px 12px;white-space:nowrap}
 /* Cream cards, small suit emblems and warm price tickets on the green shelf. */
 .shop-layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(300px,1fr);gap:24px}.shop-summary{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:16px}.wallet{display:flex;gap:12px;align-items:center;color:var(--gold);padding:6px 12px;border:1px solid #947f4b;background:#18372d;border-radius:5px}.wallet small{font-size:10px}.wallet strong{font-size:23px;line-height:1.1;font-variant-numeric:tabular-nums}.offers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;align-items:stretch}
-.function-card{--accent:#2e766a;background:var(--paper);border:2px solid #c0c5a4;border-radius:9px;padding:8px;color:var(--ink);box-shadow:0 5px 0 #102e28;display:flex;flex-direction:column;min-width:0;transition:transform .15s,border-color .15s}.function-card.consumable{--accent:#80608e;border-color:#b1a2bb}.function-card.locked{border-color:var(--gold);outline:2px solid #a47f43}.card-type{display:flex;justify-content:space-between;gap:4px;font-size:9px;color:var(--accent);font-weight:750;padding:2px 3px 7px}
-.card-face{background:#fffbef;color:var(--ink);border:1px solid #c7ccad;border-radius:5px;box-shadow:none;padding:13px 10px 10px;display:flex;flex:1;flex-direction:column;align-items:center;gap:9px;width:100%;text-align:center}.card-face:active:not(:disabled){transform:scale(.97);box-shadow:none}.card-emblem{font-family:Georgia,serif;font-size:36px;line-height:1.2;color:var(--accent);height:54px;width:54px;background:#e8ede0;border:1px solid #c2ccb9;border-radius:50%;display:grid;place-items:center}.consumable .card-emblem{background:#eee6f0;border-color:#d0bfd4}.card-face strong{font-size:14px}.effect{display:block;flex:1;font-size:12px;line-height:1.7;overflow-wrap:anywhere}.card-lifetime{font-size:9px;color:#68776a;padding-top:5px}
-.card-bottom{padding-top:11px}.price{width:fit-content;margin:0 auto 9px;border:1px solid #ba904a;background:#f6d88f;border-radius:4px;font-size:22px;font-weight:800;padding:2px 12px}.price small{font-weight:500;font-size:10px}.card-actions{display:flex;gap:5px}.card-actions button{padding:8px 6px;font-size:11px;box-shadow:0 2px 0 #a5ab91}.card-actions .buy{background:var(--accent);border-color:var(--accent);color:#fffbed;flex:1;font-weight:700}.card-actions .lock-button{color:#4b6458;background:transparent;border-color:#aeb99c;box-shadow:none}
+/* Shop cards: dark type band, light reading area, and a distinct price tag. */
+.function-card{
+  --accent:#174d42;
+  --accent-tint:#e8f1eb;
+  --accent-line:#a5bcb0;
+  display:flex;
+  flex-direction:column;
+  min-width:0;
+  padding:8px;
+  color:#1d302a;
+  background:#f3ead7;
+  border:2px solid #cbbd9c;
+  border-radius:10px;
+  box-shadow:0 4px 0 #102e28;
+  transition:transform .15s,border-color .15s;
+}
+.function-card.consumable{
+  --accent:#5b356a;
+  --accent-tint:#f0e9f4;
+  --accent-line:#c3aecb;
+  border-color:var(--accent-line);
+}
+.function-card.locked{border-color:var(--gold);outline:2px solid #a47f43;outline-offset:1px}
+.card-type{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:4px;
+  padding:4px 7px;
+  margin-bottom:5px;
+  border-radius:4px;
+  color:#fffaf0;
+  background:var(--accent);
+  font-size:10px;
+  font-weight:750;
+  line-height:1.35;
+}
+.card-type span:last-child{white-space:nowrap;font-variant-numeric:tabular-nums}
+.locked .card-type span:last-child{color:#ffe092}
+.card-face{
+  display:flex;
+  flex:1;
+  flex-direction:column;
+  align-items:center;
+  gap:7px;
+  width:100%;
+  padding:11px 9px 9px;
+  border:1px solid var(--accent-line);
+  border-radius:5px;
+  background:#fffbef;
+  color:inherit;
+  text-align:center;
+  box-shadow:none;
+}
+.card-face:active:not(:disabled){transform:scale(.97);box-shadow:none}
+.function-card button:focus-visible,.function-card select:focus-visible{
+  outline:2px solid var(--accent);
+  outline-offset:2px;
+}
+.card-emblem{
+  display:grid;
+  flex:none;
+  place-items:center;
+  width:40px;
+  height:40px;
+  border:1px solid var(--accent-line);
+  border-radius:50%;
+  background:var(--accent-tint);
+  color:var(--accent);
+  font:700 27px/1 Georgia,serif;
+}
+.card-face strong{
+  width:100%;
+  padding-bottom:6px;
+  border-bottom:1px solid var(--accent-line);
+  color:var(--accent);
+  font-size:16px;
+  line-height:1.3;
+  overflow-wrap:anywhere;
+}
+.effect{display:block;flex:1;min-width:0;font-size:12px;line-height:1.65;text-align:left;overflow-wrap:anywhere}
+.card-lifetime{color:#4c5b53;font-size:10px;line-height:1.3}
+.card-bottom{padding-top:9px}
+.price{
+  width:fit-content;
+  margin:0 auto 7px;
+  padding:2px 9px;
+  border:1px solid #aa7b31;
+  border-radius:4px;
+  background:#ffe09a;
+  color:#422a10;
+  font-size:20px;
+  font-weight:800;
+  line-height:1.2;
+  white-space:nowrap;
+  font-variant-numeric:tabular-nums;
+}
+.price small{font-size:10px;font-weight:700}
+.card-actions{display:flex;gap:5px}
+.card-actions button{padding:8px 6px;font-size:11px;box-shadow:0 2px 0 #a5ab91}
+.card-actions .buy{flex:1;min-width:0;line-height:1.25;overflow-wrap:anywhere;background:var(--accent);border-color:var(--accent);color:#fffaf0;font-weight:700}
+.card-actions .lock-button{flex:none;white-space:nowrap;color:#2a443b;background:transparent;border-color:#85988d;box-shadow:none}
+@media(hover:hover){
+  .card-actions .buy:hover:not(:disabled){background:#142c26;border-color:#142c26}
+  .card-actions .lock-button:hover:not(:disabled){background:#fffaf0}
+}
 .empty-offer{display:flex;flex-direction:column;gap:10px;align-items:center;justify-content:center;min-height:265px;border:2px dashed #789077;border-radius:9px;background:#163d34;color:var(--muted);text-align:center}.empty-offer>span{font-size:30px;color:#8caa8c}.empty-offer strong{font-size:13px}.empty-offer small{font-size:10px}
 .shop-operations{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap}.shop-operations .primary{margin-left:auto}.shop-operations button{min-height:40px}.shop-workbench{min-width:0;background:#15392f;border:1px solid #57765e;border-radius:8px;padding:16px}.section-label{display:flex;align-items:center;justify-content:space-between;gap:6px;font-size:13px;font-weight:750;color:#e9e5c9;margin:0 0 12px}.section-label>span{color:var(--gold);font-size:12px}.section-label>small{font-size:10px;color:var(--muted);font-weight:400}
 .inventory{display:grid;gap:7px;margin-bottom:20px}.inventory-empty{text-align:center;padding:18px 10px 22px;border:1px dashed #67836a;border-radius:6px;color:var(--muted)}.inventory-empty>span{font-size:30px;color:#a1b88c}.inventory-empty p{margin:8px 0 4px;font-size:12px}.inventory-empty small{font-size:10px}.owned-card{min-width:0;display:flex;align-items:center;gap:8px;background:#234c3f;border:1px solid #698267;border-radius:6px;padding:5px}.owned-face{min-width:0;text-align:left;background:transparent;border:0;padding:6px;box-shadow:none;flex:1}.owned-face strong{font-size:12px}.owned-face small{display:block;font-size:11px;color:#d7dfc9;line-height:1.65;margin-top:4px}.sell-button{padding:7px 9px;font-size:10px;background:transparent;border-color:#809173;box-shadow:none}
