@@ -48,8 +48,8 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
   justify-content:space-between;
   align-items:center;
   gap:4px;
-  padding:4px 7px;
-  margin-bottom:5px;
+  width:100%;
+  padding:0 0 5px;
   border-bottom:1px solid var(--accent-line);
   color:var(--accent);
   font-size:10px;
@@ -60,7 +60,7 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 .locked .card-type span:last-child{color:#654519}
 .card-face{
   display:flex;
-  flex:1;
+  flex:1 0 auto;
   flex-direction:column;
   align-items:center;
   gap:7px;
@@ -78,29 +78,16 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
   outline:2px solid var(--accent);
   outline-offset:2px;
 }
-.card-emblem{
-  display:grid;
-  flex:none;
-  place-items:center;
-  width:40px;
-  height:40px;
-  border:1px solid var(--accent-line);
-  border-radius:50%;
-  background:var(--accent-tint);
-  color:var(--accent);
-  font:700 27px/1 Georgia,serif;
-}
+/* Reserved for future artwork; remains blank for now. */
+.card-art{flex:1 0 42px;width:100%}
 .card-face strong{
   width:100%;
-  padding-bottom:6px;
-  border-bottom:1px solid var(--accent-line);
   color:var(--accent);
   font-size:16px;
   line-height:1.3;
   overflow-wrap:anywhere;
 }
-.effect{display:block;flex:1;min-width:0;font-size:12px;line-height:1.65;text-align:left;overflow-wrap:anywhere}
-.card-lifetime{color:#4c5b53;font-size:10px;line-height:1.3}
+.card-face .effect{display:block;width:100%;min-width:0;font-size:12px;line-height:1.65;text-align:left;overflow-wrap:anywhere}
 .card-bottom{padding-top:9px}
 .price{
   width:fit-content;
@@ -146,7 +133,7 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 .entry{min-height:calc(100dvh - 40px);grid-template-columns:1fr 320px;gap:30px;padding:20px 30px}.entry h1{font-size:34px;margin:12px 0}.plain-demo{margin-top:14px}.plain-demo>span{padding:8px 14px}.join-panel{padding:16px;gap:5px}.join-panel h2{font-size:19px}.join-panel label{margin-top:5px}input{padding:8px}
 .game{padding:0 12px 12px}.roomline{padding:5px 0;font-size:10px}.roomline .quiet{font-size:10px;padding:2px 6px}.players{gap:6px}.player{padding:6px 8px}.player-name{font-size:11px}.player-name small{font-size:9px}.player-stats{font-size:10px;gap:9px;margin-top:4px}.player-cards{display:none}
 .stage{margin-top:9px;padding:12px}.stage-heading{margin-bottom:10px}.stage-heading h2{font-size:18px}.stage-heading .eyebrow{font-size:8px;margin-bottom:4px}.timer{font-size:12px;padding:5px 9px}
-.shop-layout{grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);gap:14px}.shop-summary{margin-bottom:10px}.wallet{padding:4px 9px}.wallet strong{font-size:19px}.offers{gap:8px}.function-card{padding:6px}.card-face{padding:9px 6px;gap:7px}.card-emblem{width:38px;height:38px;font-size:28px}.card-face strong{font-size:12px}.effect{font-size:11px}.card-type{font-size:8px}.card-lifetime{font-size:8px}.card-bottom{padding-top:8px}.price{font-size:18px;margin-bottom:7px}.card-actions button{padding:8px 5px;font-size:10px}.empty-offer{min-height:225px}
+.shop-layout{grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);gap:14px}.shop-summary{margin-bottom:10px}.wallet{padding:4px 9px}.wallet strong{font-size:19px}.offers{gap:8px}.function-card{padding:6px}.card-face{padding:9px 6px;gap:7px}.card-art{flex-basis:32px}.card-face strong{font-size:12px}.card-face .effect{font-size:11px}.card-type{font-size:8px}.card-bottom{padding-top:8px}.price{font-size:18px;margin-bottom:7px}.card-actions button{padding:8px 5px;font-size:10px}.empty-offer{min-height:225px}
 .shop-workbench{padding:12px}.section-label{font-size:12px;margin-bottom:9px}.inventory{margin-bottom:14px}.inventory-empty{padding:10px 8px}.inventory-empty>span{font-size:23px}.upgrade{padding:8px 5px;gap:4px}.upgrades{gap:6px}.upgrade span{font-size:9px}.facility{margin-top:12px;padding-top:10px}.shop-operations{margin-top:13px;gap:8px}.shop-operations button{padding:8px 10px;font-size:11px;min-height:36px}
 .play-layout{grid-template-columns:minmax(0,1fr) 220px;gap:10px;margin-top:9px}.play-layout .stage{padding:9px 11px}.play-layout .stage-heading{margin-bottom:5px}.play-layout .stage-heading h2{font-size:14px}.table{min-height:52px;padding:5px;flex-direction:row;flex-wrap:wrap;gap:7px}.table-label{font-size:10px}.table .poker{width:33px;flex-basis:33px;height:44px;padding:4px;font-size:15px;border-radius:4px}.table .poker .suit{font-size:12px}.table .poker.joker{font-size:11px}.table .poker small{font-size:7px}
 .hand-section{padding:7px 2px 0}.hand-heading{font-size:11px}.hand-heading .quiet{font-size:10px;padding:4px 6px}.selection-count{font-size:9px;padding:3px 5px;margin-left:4px}.hand{min-height:97px;padding:15px 3px 8px;gap:6px}.poker{width:51px;flex-basis:51px;height:74px;font-size:22px;padding:6px}.poker .suit{font-size:20px}.poker.joker{font-size:14px}.actionbar{gap:7px;margin-top:5px}.actionbar>button{padding:8px 12px;font-size:12px}.action-hint{font-size:10px}
@@ -162,7 +149,7 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition:none!important;animation:none!important;scroll-behavior:auto!important}}
 @supports(padding:max(0px)){body{padding-left:env(safe-area-inset-left);padding-right:env(safe-area-inset-right);padding-bottom:env(safe-area-inset-bottom)}}
 /* Keep the action row visible on short landscape screens. */
-@media(max-width:1000px) and (orientation:landscape) and (max-height:450px){.table{min-height:44px}.hand{min-height:89px}.hand-section{padding-top:5px}.shop-stage .card-emblem{width:30px;height:30px;font-size:23px}.shop-stage .card-face{gap:5px;padding:7px 5px}.shop-stage .card-lifetime{display:none}}
+@media(max-width:1000px) and (orientation:landscape) and (max-height:450px){.table{min-height:44px}.hand{min-height:89px}.hand-section{padding-top:5px}.shop-stage .card-art{flex-basis:24px}.shop-stage .card-face{gap:5px;padding:7px 5px}}
 /* Fix line boxes across Windows and Linux CJK font metrics. */
 :root{line-height:1.4}
 @media(max-width:1000px) and (orientation:landscape){.roomline{padding:3px 0}}
