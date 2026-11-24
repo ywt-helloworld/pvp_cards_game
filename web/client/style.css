@@ -26,6 +26,8 @@ button:focus-visible,a:focus-visible,select:focus-visible,input:focus-visible{ou
   display:flex;
   flex-direction:column;
   min-width:0;
+  /* Prefer the taller frame without clipping longer descriptions. */
+  aspect-ratio:1 / 1.54;
   padding:8px;
   color:#1d302a;
   background:#f3ead7;
